@@ -1,8 +1,15 @@
 'use client';
 
 import { User, BarChart3, FileText, Users, Gem, ArrowLeftRight, BookOpen, ChevronDown } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function Navbar() {
+  const router = useRouter();
+
+  const handleModulesClick = () => {
+    router.push('/modules');
+  };
+
   return (
     <div className="bg-white shadow-sm border-b">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -32,6 +39,12 @@ export default function Navbar() {
             <button className="flex items-center space-x-2 text-blue-600 font-medium">
               {/* <Gem size={20} /> */}
               <span>Map</span>
+            </button>
+            <button 
+              onClick={handleModulesClick}
+              className="flex items-center space-x-2 text-gray-600 hover:text-blue-600"
+            >
+              <span>Modules</span>
             </button>
             <button className="flex items-center space-x-2 text-gray-600 hover:text-blue-600">
               {/* <BarChart3 size={20} /> */}
