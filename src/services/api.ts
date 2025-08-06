@@ -29,6 +29,8 @@ export interface Voter {
   updatedAt: string;
 }
 
+
+
 export interface FilterOptions {
   villageCodes: string[];
   sections: string[];
@@ -73,7 +75,6 @@ export interface FilterParams {
   castFilter?: string;
   page?: number;
   limit?: number;
-  search?: string;
 }
 
 export interface BulkUpdateItem {
@@ -83,19 +84,29 @@ export interface BulkUpdateItem {
 }
 
 class ApiService {
+
+
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
-        ...options.headers,
       },
       ...options,
     };
 
+    // Create a timeout promise
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 5000); // 5 second timeout
+    });
+
     try {
-      const response = await fetch(url, config);
+      // Race between the fetch and timeout
+      const response = await Promise.race([
+        fetch(url, config),
+        timeoutPromise
+      ]);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -109,7 +120,11 @@ class ApiService {
     }
   }
 
-  // Get voters with filtering and pagination
+
+
+
+
+  // Voter Management Methods
   async getVoters(params: FilterParams = {}): Promise<VotersResponse> {
     const queryParams = new URLSearchParams();
     
@@ -122,12 +137,10 @@ class ApiService {
     return this.request<VotersResponse>(`/voters?${queryParams.toString()}`);
   }
 
-  // Get single voter
   async getVoter(id: string): Promise<Voter> {
     return this.request<Voter>(`/voters/${id}`);
   }
 
-  // Create new voter
   async createVoter(voterData: Partial<Voter>): Promise<Voter> {
     return this.request<Voter>('/voters', {
       method: 'POST',
@@ -135,7 +148,6 @@ class ApiService {
     });
   }
 
-  // Update voter
   async updateVoter(id: string, voterData: Partial<Voter>): Promise<Voter> {
     return this.request<Voter>(`/voters/${id}`, {
       method: 'PUT',
@@ -143,7 +155,6 @@ class ApiService {
     });
   }
 
-  // Bulk update voters
   async bulkUpdateVoters(updates: BulkUpdateItem[]): Promise<Voter[]> {
     return this.request<Voter[]>('/voters/bulk', {
       method: 'PUT',
@@ -151,24 +162,39 @@ class ApiService {
     });
   }
 
-  // Delete voter
   async deleteVoter(id: string): Promise<{ message: string }> {
     return this.request<{ message: string }>(`/voters/${id}`, {
       method: 'DELETE',
     });
   }
 
-  // Get filter options
   async getFilterOptions(): Promise<FilterOptions> {
     return this.request<FilterOptions>('/filter-options');
   }
 
-  // Seed sample data
+  async getMasterFilterOptions(): Promise<{
+    parliaments: number[];
+    assemblies: string[];
+    districts: string[];
+    blocks: string[];
+    tehsils: string[];
+  }> {
+    return this.request<{
+      parliaments: number[];
+      assemblies: string[];
+      districts: string[];
+      blocks: string[];
+      tehsils: string[];
+    }>('/master-filter-options');
+  }
+
   async seedSampleData(): Promise<{ message: string }> {
     return this.request<{ message: string }>('/seed-data', {
       method: 'POST',
     });
   }
+
+
 }
 
 export const apiService = new ApiService(); 

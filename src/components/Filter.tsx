@@ -2,10 +2,145 @@
 
 import { useState, useEffect } from 'react';
 import { apiService, FilterOptions, FilterParams } from '../services/api';
+import { Filter as FilterIcon, X, ChevronDown, ChevronUp, Search } from 'lucide-react';
 
 interface FilterProps {
   onFilterChange: (filters: FilterParams) => void;
   loading?: boolean;
+}
+
+// Searchable Select Component
+interface SearchableSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: (string | number)[];
+  placeholder: string;
+  label: string;
+  disabled?: boolean;
+  id: string;
+  activeDropdown: string | null;
+  onDropdownToggle: (id: string | null) => void;
+}
+
+function SearchableSelect({ 
+  value, 
+  onChange, 
+  options, 
+  placeholder, 
+  label, 
+  disabled, 
+  id, 
+  activeDropdown, 
+  onDropdownToggle 
+}: SearchableSelectProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredOptions, setFilteredOptions] = useState<(string | number)[]>([]);
+
+  const isOpen = activeDropdown === id;
+
+  useEffect(() => {
+    const filtered = options.filter(option => 
+      option.toString().toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredOptions(filtered);
+  }, [searchTerm, options]);
+
+  const handleSelect = (option: string | number) => {
+    onChange(option.toString());
+    onDropdownToggle(null);
+    setSearchTerm('');
+  };
+
+  const handleToggle = () => {
+    if (!disabled) {
+      if (isOpen) {
+        onDropdownToggle(null);
+        setSearchTerm('');
+      } else {
+        onDropdownToggle(id);
+        setSearchTerm('');
+      }
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (isOpen && !target.closest(`[data-dropdown-id="${id}"]`)) {
+        onDropdownToggle(null);
+        setSearchTerm('');
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, id, onDropdownToggle]);
+
+  return (
+    <div className="relative" data-dropdown-id={id}>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        {label}
+      </label>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={disabled}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200 text-left flex items-center justify-between"
+        >
+          <span className={value ? 'text-gray-900' : 'text-gray-500'}>
+            {value || placeholder}
+          </span>
+          <ChevronDown size={16} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {isOpen && (
+          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
+            {/* Search Input */}
+            <div className="p-2 border-b border-gray-200">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Options List */}
+            <div className="max-h-48 overflow-y-auto">
+              {filteredOptions.length > 0 ? (
+                filteredOptions.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => handleSelect(option)}
+                    className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+                  >
+                    {option}
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-sm text-gray-500">
+                  No options found
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function Filter({ onFilterChange, loading = false }: FilterProps) {
@@ -24,6 +159,7 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
   const [mobileFilter, setmobileFilter] = useState('');
   const [castFilter, setcastFilter] = useState('');
   const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     villageCodes: [],
     sections: [],
@@ -101,211 +237,232 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
     setcastFilter('');
   };
 
-  return (
-    <div className="bg-white shadow-sm border-b">
-      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="flex justify-between items-start mb-4">
-          <div className="w-full">
-            {/* First Row - First 8 filters */}
-            <div className="flex flex-wrap gap-4 mb-4">
-              <select
-                value={villageCode}
-                onChange={(e) => setvillageCode(e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm"
-                disabled={loadingOptions}
-              >
-                <option value="">Village code</option>
-                {filterOptions.villageCodes.map((code) => (
-                  <option key={code} value={code}>{code}</option>
-                ))}
-              </select>
-              
-              <select
-                value={SectionFilter}
-                onChange={(e) => setSectionFilter(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded text-sm"
-                disabled={loadingOptions}
-              >
-                <option value="">Section / Colony</option>
-                {filterOptions.sections.map((section) => (
-                  <option key={section} value={section}>{section}</option>
-                ))}
-              </select>
-              
-              <select
-                value={villageNameFilter}
-                onChange={(e) => setvillageNameFilter(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded text-sm"
-                disabled={loadingOptions}
-              >
-                <option value="">Village Name</option>
-                {filterOptions.villageNames.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-              
-              <select
-                value={gramPanchayatFilter}
-                onChange={(e) => setgramPanchayatFilter(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded text-sm"
-                disabled={loadingOptions}
-              >
-                <option value="">Gram Panchayat</option>
-                {filterOptions.gramPanchayats.map((gp) => (
-                  <option key={gp} value={gp}>{gp}</option>
-                ))}
-              </select>
-              
-              <select
-                value={patwarCircleFilter}
-                onChange={(e) => setpatwarCircleFilter(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded text-sm"
-                disabled={loadingOptions}
-              >
-                <option value="">Patwar Circle</option>
-                {filterOptions.patwarCircles.map((pc) => (
-                  <option key={pc} value={pc}>{pc}</option>
-                ))}
-              </select>
-              
-              <select
-                value={lrCircleFilter}
-                onChange={(e) => setlrCircleFilter(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded text-sm"
-                disabled={loadingOptions}
-              >
-                <option value="">LR Circle</option>
-                {filterOptions.lrCircles.map((lc) => (
-                  <option key={lc} value={lc}>{lc}</option>
-                ))}
-              </select>
-              
-              <select
-                value={dobFilter}
-                onChange={(e) => setdobFilter(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded text-sm"
-                disabled={loadingOptions}
-              >
-                <option value="">DOB</option>
-                {/* Add date options if needed */}
-              </select>
-              
-              <select
-                value={ageFilter}
-                onChange={(e) => setageFilter(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded text-sm"
-                disabled={loadingOptions}
-              >
-                <option value="">Age</option>
-                {filterOptions.ages.map((age) => (
-                  <option key={age} value={age}>{age}</option>
-                ))}
-              </select>
-            </div>
+  const hasActiveFilters = villageCode || SectionFilter || villageNameFilter || 
+    gramPanchayatFilter || patwarCircleFilter || lrCircleFilter || 
+    dobFilter || ageFilter || nameFilter || fnameFilter || 
+    hnoFilter || malefemaleFilter || mobileFilter || castFilter;
 
-            {/* More/Less Button and Clear Filters */}
-            <div className="flex justify-between items-center mb-4">
+  return (
+    <div className="bg-gray-50 border-b border-gray-200">
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-3">
+            {/* <div className="p-2 bg-gray-200 rounded-lg">
+              <FilterIcon size={20} className="text-gray-600" />
+            </div> */}
+            {/* <h2 className="text-xl font-semibold text-gray-800">Data Filters</h2> */}
+          </div>
+          
+          <div className="flex items-center space-x-3">
+            {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
-                className="px-4 py-2 text-sm font-medium text-red-600 hover:text-red-800 border border-red-300 rounded-md hover:bg-red-50 transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all duration-200"
                 disabled={loading}
               >
-                Clear All Filters
+                <X size={16} />
+                <span>Clear All</span>
               </button>
-              
-              <button
-                onClick={() => setShowMoreFilters(!showMoreFilters)}
-                className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 border border-blue-300 rounded-md hover:bg-blue-50 transition-colors"
-                disabled={loading}
-              >
-                {showMoreFilters ? 'Show Less' : 'Show More Filters'}
-              </button>
-            </div>
-
-            {/* Second Row - Remaining filters (hidden by default) */}
-            {showMoreFilters && (
-              <div className="flex flex-wrap gap-4 mb-4">
-                <select
-                  value={nameFilter}
-                  onChange={(e) => setnameFilter(e.target.value)}
-                  className="px-3 py-1 border border-gray-300 rounded text-sm"
-                  disabled={loadingOptions}
-                >
-                  <option value="">Name</option>
-                  {filterOptions.names.map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={fnameFilter}
-                  onChange={(e) => setfnameFilter(e.target.value)}
-                  className="px-3 py-1 border border-gray-300 rounded text-sm"
-                  disabled={loadingOptions}
-                >
-                  <option value="">FName</option>
-                  {filterOptions.fnames.map((fname) => (
-                    <option key={fname} value={fname}>{fname}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={hnoFilter}
-                  onChange={(e) => sethnoFilter(e.target.value)}
-                  className="px-3 py-1 border border-gray-300 rounded text-sm"
-                  disabled={loadingOptions}
-                >
-                  <option value="">House No.</option>
-                  {filterOptions.hnos.map((hno) => (
-                    <option key={hno} value={hno}>{hno}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={malefemaleFilter}
-                  onChange={(e) => setmalefemaleFilter(e.target.value)}
-                  className="px-3 py-1 border border-gray-300 rounded text-sm"
-                  disabled={loadingOptions}
-                >
-                  <option value="">Male / Female</option>
-                  {filterOptions.malefemales.map((gender) => (
-                    <option key={gender} value={gender}>{gender}</option>
-                  ))}
-                </select>
-
-                <input 
-                  type="number" 
-                  placeholder='Enter Mobile No.' 
-                  value={mobileFilter} 
-                  onChange={(e)=> setmobileFilter(e.target.value)} 
-                  className="px-3 py-1 border border-gray-300 rounded text-sm"
-                  disabled={loading}
-                />
-
-                <select
-                  value={castFilter}
-                  onChange={(e) => setcastFilter(e.target.value)}
-                  className="px-3 py-1 border border-gray-300 rounded text-sm"
-                  disabled={loadingOptions}
-                >
-                  <option value="">Cast</option>
-                  {filterOptions.castTypes.map((cast) => (
-                    <option key={cast} value={cast}>{cast}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Loading indicator */}
-            {(loading || loadingOptions) && (
-              <div className="text-center py-2">
-                <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-sm text-gray-600">
-                  {loadingOptions ? 'Loading filter options...' : 'Loading data...'}
-                </span>
-              </div>
             )}
           </div>
+        </div>
+
+        {/* Loading indicator */}
+        {(loading || loadingOptions) && (
+          <div className="flex items-center justify-center py-4 mb-4">
+            <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
+            <span className="ml-3 text-sm text-gray-600">
+              {loadingOptions ? 'Loading filter options...' : 'Loading data...'}
+            </span>
+          </div>
+        )}
+
+        {/* Filter Grid */}
+        <div className="space-y-6">
+          {/* Primary Filters */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+            <SearchableSelect
+              id="section"
+              value={SectionFilter}
+              onChange={setSectionFilter}
+              options={filterOptions.sections}
+              placeholder="सभी"
+              label="अनुभाग"
+              disabled={loadingOptions}
+              activeDropdown={activeDropdown}
+              onDropdownToggle={setActiveDropdown}
+            />
+            
+            <SearchableSelect
+              id="villageName"
+              value={villageNameFilter}
+              onChange={setvillageNameFilter}
+              options={filterOptions.villageNames}
+              placeholder="सभी"
+              label="गाँव का नाम"
+              disabled={loadingOptions}
+              activeDropdown={activeDropdown}
+              onDropdownToggle={setActiveDropdown}
+            />
+            
+            <SearchableSelect
+              id="gramPanchayat"
+              value={gramPanchayatFilter}
+              onChange={setgramPanchayatFilter}
+              options={filterOptions.gramPanchayats}
+              placeholder="सभी"
+              label="ग्राम पंचायत"
+              disabled={loadingOptions}
+              activeDropdown={activeDropdown}
+              onDropdownToggle={setActiveDropdown}
+            />
+            
+            <SearchableSelect
+              id="patwarCircle"
+              value={patwarCircleFilter}
+              onChange={setpatwarCircleFilter}
+              options={filterOptions.patwarCircles}
+              placeholder="सभी"
+              label="पटवार मंडल"
+              disabled={loadingOptions}
+              activeDropdown={activeDropdown}
+              onDropdownToggle={setActiveDropdown}
+            />
+            
+            <SearchableSelect
+              id="lrCircle"
+              value={lrCircleFilter}
+              onChange={setlrCircleFilter}
+              options={filterOptions.lrCircles}
+              placeholder="सभी"
+              label="ILR Circle"
+              disabled={loadingOptions}
+              activeDropdown={activeDropdown}
+              onDropdownToggle={setActiveDropdown}
+            />
+            
+            <SearchableSelect
+              id="dob"
+              value={dobFilter}
+              onChange={setdobFilter}
+              options={[]} // Add date options if needed
+              placeholder="सभी"
+              label="जन्म तिथि"
+              disabled={loadingOptions}
+              activeDropdown={activeDropdown}
+              onDropdownToggle={setActiveDropdown}
+            />
+            
+            <SearchableSelect
+              id="age"
+              value={ageFilter}
+              onChange={setageFilter}
+              options={filterOptions.ages}
+              placeholder="सभी"
+              label="उम्र"
+              disabled={loadingOptions}
+              activeDropdown={activeDropdown}
+              onDropdownToggle={setActiveDropdown}
+            />
+
+            <SearchableSelect
+              id="name"
+              value={nameFilter}
+              onChange={setnameFilter}
+              options={filterOptions.names}
+              placeholder="सभी"
+              label="नाम"
+              disabled={loadingOptions}
+              activeDropdown={activeDropdown}
+              onDropdownToggle={setActiveDropdown}
+            />
+          </div>
+
+          {/* Additional Filters (Hidden by default) */}
+          {showMoreFilters && (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 pt-4 border-t border-gray-200">
+              <SearchableSelect
+                id="fname"
+                value={fnameFilter}
+                onChange={setfnameFilter}
+                options={filterOptions.fnames}
+                placeholder="सभी"
+                label="पिता का नाम"
+                disabled={loadingOptions}
+                activeDropdown={activeDropdown}
+                onDropdownToggle={setActiveDropdown}
+              />
+
+              <SearchableSelect
+                id="hno"
+                value={hnoFilter}
+                onChange={sethnoFilter}
+                options={filterOptions.hnos}
+                placeholder="सभी"
+                label="गृह सं"
+                disabled={loadingOptions}
+                activeDropdown={activeDropdown}
+                onDropdownToggle={setActiveDropdown}
+              />
+
+              <SearchableSelect
+                id="malefemale"
+                value={malefemaleFilter}
+                onChange={setmalefemaleFilter}
+                options={filterOptions.malefemales}
+                placeholder="सभी"
+                label="पुरुष / महिला"
+                disabled={loadingOptions}
+                activeDropdown={activeDropdown}
+                onDropdownToggle={setActiveDropdown}
+              />
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  मोबाइल नंबर
+                </label>
+                <input 
+                  type="number" 
+                  placeholder="Enter mobile number" 
+                  value={mobileFilter} 
+                  onChange={(e)=> setmobileFilter(e.target.value)} 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                  disabled={loading}
+                />
+              </div>
+
+              <SearchableSelect
+                id="cast"
+                value={castFilter}
+                onChange={setcastFilter}
+                options={filterOptions.castTypes}
+                placeholder="सभी"
+                label="जाति"
+                disabled={loadingOptions}
+                activeDropdown={activeDropdown}
+                onDropdownToggle={setActiveDropdown}
+              />
+            </div>
+          )}
+          
+          <button
+            onClick={() => setShowMoreFilters(!showMoreFilters)}
+            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm"
+            disabled={loading}
+          >
+            {showMoreFilters ? (
+              <>
+                <ChevronUp size={16} />
+                <span>Show Less</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown size={16} />
+                <span>Show More</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

@@ -5,12 +5,11 @@ import { useState, useMemo } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
-  getFilteredRowModel,
   getSortedRowModel,
   flexRender,
   ColumnDef,
 } from '@tanstack/react-table';
-import { Search, ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Voter } from '../services/api';
 import { useVoters } from '../hooks/useVoters';
 
@@ -175,17 +174,8 @@ export default function DataTable() {
     error,
     setPage,
     setItemsPerPage,
-    setSearch,
     updateVoter
   } = useVoters();
-
-  const [globalFilter, setGlobalFilter] = useState('');
-
-  // Update search when global filter changes
-  const handleSearchChange = (value: string) => {
-    setGlobalFilter(value);
-    setSearch(value);
-  };
 
   const handleUpdateData = async (rowIndex: number, columnId: string, value: any) => {
     try {
@@ -210,12 +200,7 @@ export default function DataTable() {
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    state: {
-      globalFilter,
-    },
-    onGlobalFilterChange: handleSearchChange,
   });
 
   // if (error) {
@@ -237,35 +222,6 @@ export default function DataTable() {
 
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-      {/* Search and Pagination */}
-      <div className="flex justify-between items-center p-4 border-b border-gray-200">
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-700">Show</span>
-          <select 
-            className="border border-gray-300 rounded px-2 py-1 text-sm"
-            value={pagination.itemsPerPage}
-            onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-            disabled={loading}
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-sm text-gray-700">entries</span>
-        </div>
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search..."
-            value={globalFilter}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-            disabled={loading}
-          />
-        </div>
-      </div>
 
       {/* Excel-like DataGrid */}
       <div className="overflow-x-auto">
@@ -286,10 +242,10 @@ export default function DataTable() {
                             header.column.columnDef.header,
                             header.getContext()
                           )}
-                      <div className="flex flex-col">
+                      {/* <div className="flex flex-col">
                         <ChevronDown size={12} className="text-gray-400" />
                         <ChevronDown size={12} className="text-gray-400 rotate-180" />
-                      </div>
+                      </div> */}
                     </div>
                   </th>
                 ))}
@@ -309,11 +265,16 @@ export default function DataTable() {
                 </tr>
               ))
             ) : data.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-gray-500">
-                  No data found
-                </td>
-              </tr>
+              // Empty grid rows
+              Array.from({ length: pagination.itemsPerPage }).map((_, index) => (
+                <tr key={`empty-${index}`} className="border-b border-gray-100">
+                  {Array.from({ length: columns.length }).map((_, cellIndex) => (
+                    <td key={cellIndex} className="px-4 py-3 text-sm text-gray-400 border-r border-gray-100 last:border-r-0">
+                      <div className="h-4"></div>
+                    </td>
+                  ))}
+                </tr>
+              ))
             ) : (
               table.getRowModel().rows.map((row) => (
                 <tr
@@ -344,44 +305,90 @@ export default function DataTable() {
 
       {/* Grid Footer */}
       <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-        <div className="flex justify-between items-center text-sm text-gray-700">
-          <div>
+        <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-gray-700 space-y-2 sm:space-y-0">
+          <div className="text-center sm:text-left">
             Showing {loading ? '...' : `${((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to ${Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of ${pagination.totalItems} entries`}
           </div>
-          <div className="flex items-center space-x-2">
+          
+          {/* Centered Pagination */}
+          <div className="flex items-center justify-center space-x-1">
             <button 
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={() => handlePageChange(pagination.currentPage - 1)}
               disabled={pagination.currentPage <= 1 || loading}
+              title="Previous"
             >
-              Previous
+              <ChevronLeft size={16} />
             </button>
             
-            {/* Page numbers */}
-            {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-              const pageNum = i + 1;
-              return (
-                <button
-                  key={pageNum}
-                  className={`px-3 py-1 rounded ${
-                    pageNum === pagination.currentPage
-                      ? 'bg-blue-600 text-white'
-                      : 'border border-gray-300 hover:bg-gray-100'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  onClick={() => handlePageChange(pageNum)}
-                  disabled={loading}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
+            {/* Page numbers with ellipsis */}
+            {(() => {
+              const totalPages = pagination.totalPages;
+              const currentPage = pagination.currentPage;
+              const pages = [];
+              
+              // Always show first page
+              pages.push(1);
+              
+              if (totalPages <= 7) {
+                // Show all pages if total is 7 or less
+                for (let i = 2; i <= totalPages; i++) {
+                  pages.push(i);
+                }
+              } else {
+                // Show pages around current page
+                if (currentPage <= 4) {
+                  // Near the beginning
+                  for (let i = 2; i <= 5; i++) {
+                    pages.push(i);
+                  }
+                  pages.push('...');
+                  pages.push(totalPages);
+                } else if (currentPage >= totalPages - 3) {
+                  // Near the end
+                  pages.push('...');
+                  for (let i = totalPages - 4; i <= totalPages; i++) {
+                    if (i > 1) pages.push(i);
+                  }
+                } else {
+                  // In the middle
+                  pages.push('...');
+                  for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+                    pages.push(i);
+                  }
+                  pages.push('...');
+                  pages.push(totalPages);
+                }
+              }
+              
+              return pages.map((page, index) => (
+                <div key={index}>
+                  {page === '...' ? (
+                    <span className="px-2 py-1 text-gray-400">...</span>
+                  ) : (
+                    <button
+                      className={`px-3 py-1 rounded transition-colors ${
+                        page === currentPage
+                          ? 'bg-gray-600 text-white'
+                          : 'border border-gray-300 hover:bg-gray-100 text-gray-700'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      onClick={() => handlePageChange(page as number)}
+                      disabled={loading}
+                    >
+                      {page}
+                    </button>
+                  )}
+                </div>
+              ));
+            })()}
             
             <button 
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={() => handlePageChange(pagination.currentPage + 1)}
               disabled={pagination.currentPage >= pagination.totalPages || loading}
+              title="Next"
             >
-              Next
+              <ChevronRight size={16} />
             </button>
           </div>
         </div>

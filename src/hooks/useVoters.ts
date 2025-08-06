@@ -28,7 +28,7 @@
     setFilters: (filters: FilterParams) => void;
     setPage: (page: number) => void;
     setItemsPerPage: (limit: number) => void;
-    setSearch: (search: string) => void;
+
     
     // CRUD operations
     createVoter: (voterData: Partial<Voter>) => Promise<Voter>;
@@ -63,8 +63,8 @@
     });
     
     // Loading states
-    const [loading, setLoading] = useState(true);
-    const [loadingOptions, setLoadingOptions] = useState(true);
+    const [loading, setLoading] = useState(false); // Changed to false initially
+    const [loadingOptions, setLoadingOptions] = useState(false); // Changed to false initially
     
     // Error states
     const [error, setError] = useState<string | null>(null);
@@ -72,7 +72,6 @@
     
     // Filters state
     const [filters, setFiltersState] = useState<FilterParams>(initialFilters);
-    const [search, setSearchState] = useState('');
     const [page, setPageState] = useState(1);
     const [itemsPerPage, setItemsPerPageState] = useState(10);
 
@@ -85,8 +84,7 @@
         const response: VotersResponse = await apiService.getVoters({
           ...filters,
           page,
-          limit: itemsPerPage,
-          search: search || undefined
+          limit: itemsPerPage
         });
         
         setVoters(response.voters);
@@ -97,7 +95,7 @@
       } finally {
         setLoading(false);
       }
-    }, [filters, page, itemsPerPage, search]);
+    }, [filters, page, itemsPerPage]);
 
     // Fetch filter options
     const fetchFilterOptions = useCallback(async () => {
@@ -161,8 +159,13 @@
     };
 
     // Action functions
-    const refetch = useCallback(() => fetchVoters(), [fetchVoters]);
-    const refetchOptions = useCallback(() => fetchFilterOptions(), [fetchFilterOptions]);
+    const refetch = useCallback(() => {
+      return fetchVoters();
+    }, [fetchVoters]);
+
+    const refetchOptions = useCallback(() => {
+      return fetchFilterOptions();
+    }, [fetchFilterOptions]);
 
     const setFilters = useCallback((newFilters: FilterParams) => {
       setFiltersState(newFilters);
@@ -178,10 +181,7 @@
       setPageState(1); // Reset to first page when items per page changes
     }, []);
 
-    const setSearch = useCallback((newSearch: string) => {
-      setSearchState(newSearch);
-      setPageState(1); // Reset to first page when search changes
-    }, []);
+
 
     return {
       // Data
@@ -205,7 +205,6 @@
       setFilters,
       setPage,
       setItemsPerPage,
-      setSearch,
       
       // CRUD operations
       createVoter,
