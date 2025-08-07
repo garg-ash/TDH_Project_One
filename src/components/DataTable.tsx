@@ -93,8 +93,8 @@ const columns: ColumnDef<Voter>[] = [
     id: 'select',
     header: 'Sr. No.',
     cell: ({ row }) => (
-      <div className="flex items-center space-x-2">
-        <span>{row.index + 1}</span>
+      <div className="flex items-center space-x-2 bg-gray-200 px-2 py-1">
+        <span className="text-gray-800 font-medium">{row.index + 1}</span>
       </div>
     ),
     size: 80,
@@ -168,32 +168,31 @@ const columns: ColumnDef<Voter>[] = [
 
 export default function DataTable() {
   const {
-    voters: data,
+    data,
     pagination,
     loading,
     error,
-    setPage,
-    setItemsPerPage,
+    handlePageChange,
+    handleItemsPerPageChange,
     updateVoter
   } = useVoters();
+
+
 
   const handleUpdateData = async (rowIndex: number, columnId: string, value: any) => {
     try {
       const voter = data[rowIndex];
       if (!voter) return;
 
-      await updateVoter(voter._id, { [columnId]: value });
+      await updateVoter(voter.id, { [columnId]: value });
+      
+      // Show success message (optional)
+      console.log(`Updated ${columnId} for voter ${voter.id}`);
     } catch (error) {
       console.error('Error updating voter:', error);
+      // The error is already handled in the useVoters hook
+      // We don't need to show an error here since the data is updated locally
     }
-  };
-
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleItemsPerPageChange = (newLimit: number) => {
-    setItemsPerPage(newLimit);
   };
 
   const table = useReactTable({
@@ -220,19 +219,49 @@ export default function DataTable() {
   //   );
   // }
 
+  // Show error state if there's an error
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="text-center">
+          <div className="text-red-600 text-lg font-semibold mb-2">Error Loading Data</div>
+          <div className="text-gray-600 mb-4">{error}</div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="text-gray-600">Loading data...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden">
 
       {/* Excel-like DataGrid */}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-200 border-b border-gray-300">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200 last:border-r-0 cursor-pointer hover:bg-gray-100"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider border-r border-gray-300 last:border-r-0 cursor-pointer hover:bg-gray-300"
                     style={{ width: header.getSize() }}
                   >
                     <div className="flex items-center justify-between">
@@ -252,25 +281,25 @@ export default function DataTable() {
               </tr>
             ))}
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white">
             {loading ? (
               // Loading skeleton
               Array.from({ length: pagination.itemsPerPage }).map((_, index) => (
                 <tr key={`loading-${index}`} className="animate-pulse">
                   {Array.from({ length: columns.length }).map((_, cellIndex) => (
                     <td key={cellIndex} className="px-4 py-3">
-                      <div className="h-4 bg-gray-200 rounded"></div>
+                      <div className={`h-4 ${cellIndex === 0 ? 'bg-gray-200' : 'bg-gray-200'}`}></div>
                     </td>
                   ))}
                 </tr>
               ))
-            ) : data.length === 0 ? (
+            ) : !data || data.length === 0 ? (
               // Empty grid rows
               Array.from({ length: pagination.itemsPerPage }).map((_, index) => (
                 <tr key={`empty-${index}`} className="border-b border-gray-100">
                   {Array.from({ length: columns.length }).map((_, cellIndex) => (
                     <td key={cellIndex} className="px-4 py-3 text-sm text-gray-400 border-r border-gray-100 last:border-r-0">
-                      <div className="h-4"></div>
+                      <div className={`h-4 ${cellIndex === 0 ? 'bg-gray-200' : ''}`}></div>
                     </td>
                   ))}
                 </tr>
@@ -279,12 +308,12 @@ export default function DataTable() {
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="hover:bg-gray-50 transition-colors"
+                  className="hover:bg-gray-50 transition-colors border-b border-gray-300"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className="px-4 py-3 text-sm text-gray-900 border-r border-gray-100 last:border-r-0"
+                      className="px-4 py-3 text-sm text-gray-900 border-r border-gray-300 last:border-r-0"
                       style={{ width: cell.column.getSize() }}
                     >
                       <EditableCell
@@ -307,64 +336,49 @@ export default function DataTable() {
       <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
         <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-gray-700 space-y-2 sm:space-y-0">
           <div className="text-center sm:text-left">
-            Showing {loading ? '...' : `${((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to ${Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of ${pagination.totalItems} entries`}
+            Showing {loading || !pagination ? '...' : `${((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to ${Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of ${pagination.totalItems} entries`}
           </div>
           
           {/* Centered Pagination */}
           <div className="flex items-center justify-center space-x-1">
             <button 
-              className="p-2 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700"
               onClick={() => handlePageChange(pagination.currentPage - 1)}
-              disabled={pagination.currentPage <= 1 || loading}
+              disabled={!pagination || pagination.currentPage <= 1 || loading}
               title="Previous"
             >
-              <ChevronLeft size={16} />
+              &lt;
             </button>
             
             {/* Page numbers with ellipsis */}
             {(() => {
+              if (!pagination) return null;
               const totalPages = pagination.totalPages;
               const currentPage = pagination.currentPage;
               const pages = [];
               
-              // Always show first page
-              pages.push(1);
-              
-              if (totalPages <= 7) {
-                // Show all pages if total is 7 or less
-                for (let i = 2; i <= totalPages; i++) {
+              if (totalPages <= 5) {
+                // If total pages is 5 or less, show all pages
+                for (let i = 1; i <= totalPages; i++) {
                   pages.push(i);
                 }
               } else {
-                // Show pages around current page
-                if (currentPage <= 4) {
-                  // Near the beginning
-                  for (let i = 2; i <= 5; i++) {
-                    pages.push(i);
-                  }
-                  pages.push('...');
-                  pages.push(totalPages);
-                } else if (currentPage >= totalPages - 3) {
-                  // Near the end
-                  pages.push('...');
-                  for (let i = totalPages - 4; i <= totalPages; i++) {
-                    if (i > 1) pages.push(i);
-                  }
-                } else {
-                  // In the middle
-                  pages.push('...');
-                  for (let i = currentPage - 1; i <= currentPage + 1; i++) {
-                    pages.push(i);
-                  }
-                  pages.push('...');
-                  pages.push(totalPages);
+                // Show first 5 pages
+                for (let i = 1; i <= 5; i++) {
+                  pages.push(i);
                 }
+                
+                // Add ellipsis
+                pages.push('...');
+                
+                // Add total pages
+                pages.push(totalPages);
               }
               
               return pages.map((page, index) => (
                 <div key={index}>
                   {page === '...' ? (
-                    <span className="px-2 py-1 text-gray-400">...</span>
+                    <span className="px-2 py-1 text-gray-400">......</span>
                   ) : (
                     <button
                       className={`px-3 py-1 rounded transition-colors ${
@@ -382,13 +396,14 @@ export default function DataTable() {
               ));
             })()}
             
+            {/* Items per page button */}
             <button 
-              className="p-2 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              onClick={() => handlePageChange(pagination.currentPage + 1)}
-              disabled={pagination.currentPage >= pagination.totalPages || loading}
-              title="Next"
+              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center space-x-1 ml-4"
+              onClick={() => console.log('Items per page clicked')}
+              title="Items per page"
             >
-              <ChevronRight size={16} />
+              <span>{pagination.itemsPerPage}</span>
+              <span>^</span>
             </button>
           </div>
         </div>

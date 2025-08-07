@@ -1,35 +1,35 @@
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
 export interface Voter {
-  _id: string;
-  familyId: string;
+  id: number;
   name: string;
-  mobile1: string;
-  mobile2: string;
-  dob: number;
-  ps: string;
-  gp: string;
-  gram: string;
-  castIda: string;
-  cast: number;
-  pc: number;
-  ac: string;
-  district: string;
-  villageCode: string;
-  villageName: string;
-  gramPanchayat: string;
-  patwarCircle: string;
-  lrCircle: string;
-  age: number;
-  fname: string;
-  hno: string;
-  malefemale: string;
-  castType: string;
-  createdAt: string;
-  updatedAt: string;
+  fname?: string;
+  mname?: string;
+  surname?: string;
+  cast_id?: string;
+  cast_ida?: string;
+  mobile1?: string;
+  mobile2?: string;
+  age?: number;
+  date_of_birth?: string;
+  parliament?: string;
+  assembly?: string;
+  district?: string;
+  block?: string;
+  tehsil?: string;
+  village?: string;
+  booth?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
-
+export interface SurnameData {
+  id: number;
+  surname: string;
+  count: number;
+  castId: string;
+  castIda: string;
+}
 
 export interface FilterOptions {
   villageCodes: string[];
@@ -44,6 +44,32 @@ export interface FilterOptions {
   hnos: string[];
   malefemales: string[];
   castTypes: string[];
+  motherNames: string[];
+  addresses: string[];
+  surnames: string[];
+  religions: string[];
+  categories: string[];
+}
+
+export interface FilterParams {
+  parliament?: string;
+  assembly?: string;
+  district?: string;
+  block?: string;
+  tehsil?: string;
+  castId?: string;
+  castIda?: string;
+  mobile1?: string;
+  mobile2?: string;
+  ageMin?: number;
+  ageMax?: number;
+  dateOfBirth?: string;
+  village?: string;
+  booth?: string;
+  name?: string;
+  fname?: string;
+  mname?: string;
+  surname?: string;
 }
 
 export interface PaginationInfo {
@@ -54,147 +80,170 @@ export interface PaginationInfo {
 }
 
 export interface VotersResponse {
-  voters: Voter[];
+  data: Voter[];
   pagination: PaginationInfo;
 }
 
-export interface FilterParams {
-  villageCode?: string;
-  sectionFilter?: string;
-  villageNameFilter?: string;
-  gramPanchayatFilter?: string;
-  patwarCircleFilter?: string;
-  lrCircleFilter?: string;
-  dobFilter?: string;
-  ageFilter?: string;
-  nameFilter?: string;
-  fnameFilter?: string;
-  hnoFilter?: string;
-  malefemaleFilter?: string;
-  mobileFilter?: string;
-  castFilter?: string;
-  page?: number;
-  limit?: number;
+export interface MasterFilterOptions {
+  parliamentOptions: string[];
+  assemblyOptions: string[];
+  districtOptions: string[];
+  blockOptions: string[];
+  tehsilOptions: string[];
 }
 
-export interface BulkUpdateItem {
-  id: string;
-  columnId: string;
-  value: any;
+export interface LoginCredentials {
+  email: string;
+  password: string;
+  role: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: {
+    id: number;
+    email: string;
+    role: string;
+  };
 }
 
 class ApiService {
+  private getAuthHeaders(): HeadersInit {
+    const token = localStorage.getItem('authToken');
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+  }
 
+  private async handleResponse<T>(response: Response): Promise<T> {
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
-    
-    const config: RequestInit = {
+  // Authentication
+  async login(credentials: LoginCredentials): Promise<LoginResponse> {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      ...options,
-    };
-
-    // Create a timeout promise
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout')), 5000); // 5 second timeout
+      body: JSON.stringify(credentials),
     });
-
-    try {
-      // Race between the fetch and timeout
-      const response = await Promise.race([
-        fetch(url, config),
-        timeoutPromise
-      ]);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('API request failed:', error);
-      throw error;
-    }
+    return this.handleResponse<LoginResponse>(response);
   }
 
+  // Master filter options
+  async fetchMasterFilterOptions(): Promise<MasterFilterOptions> {
+    const response = await fetch(`${API_BASE_URL}/master-filter-options`);
+    return this.handleResponse<MasterFilterOptions>(response);
+  }
 
+  // Filter options
+  async fetchFilterOptions(): Promise<FilterOptions> {
+    const response = await fetch(`${API_BASE_URL}/filter-options`);
+    return this.handleResponse<FilterOptions>(response);
+  }
 
-
-
-  // Voter Management Methods
-  async getVoters(params: FilterParams = {}): Promise<VotersResponse> {
-    const queryParams = new URLSearchParams();
+  // Get voters with filters and pagination
+  async getVoters(
+    page: number = 1,
+    limit: number = 500,
+    filters: FilterParams = {}
+  ): Promise<VotersResponse> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+    });
     
-    Object.entries(params).forEach(([key, value]) => {
+    // Add filter parameters
+    Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
-        queryParams.append(key, value.toString());
+        params.append(key, value.toString());
       }
     });
 
-    return this.request<VotersResponse>(`/voters?${queryParams.toString()}`);
+    const response = await fetch(`${API_BASE_URL}/voters?${params}`);
+    return this.handleResponse<VotersResponse>(response);
   }
 
-  async getVoter(id: string): Promise<Voter> {
-    return this.request<Voter>(`/voters/${id}`);
-  }
-
-  async createVoter(voterData: Partial<Voter>): Promise<Voter> {
-    return this.request<Voter>('/voters', {
-      method: 'POST',
+  // Update voter
+  async updateVoter(id: number, voterData: Partial<Voter>): Promise<{ message: string }> {
+    const token = localStorage.getItem('authToken');
+    const endpoint = token ? `/voters/${id}` : `/voters/${id}/demo`;
+    const headers = token ? this.getAuthHeaders() : { 'Content-Type': 'application/json' };
+    
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'PUT',
+      headers,
       body: JSON.stringify(voterData),
     });
+    return this.handleResponse<{ message: string }>(response);
   }
 
-  async updateVoter(id: string, voterData: Partial<Voter>): Promise<Voter> {
-    return this.request<Voter>(`/voters/${id}`, {
+  // Get surname data
+  async getSurnameData(filters: { name?: string; fname?: string; mname?: string } = {}): Promise<SurnameData[]> {
+    const params = new URLSearchParams(filters);
+    const response = await fetch(`${API_BASE_URL}/surname-data?${params}`);
+    return this.handleResponse<SurnameData[]>(response);
+  }
+
+  // Update surname data
+  async updateSurnameData(id: number, data: { surname: string; castId: string; castIda: string }): Promise<{ message: string }> {
+    const token = localStorage.getItem('authToken');
+    const endpoint = token ? `/surname-data/${id}` : `/surname-data/${id}/demo`;
+    const headers = token ? this.getAuthHeaders() : { 'Content-Type': 'application/json' };
+    
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PUT',
-      body: JSON.stringify(voterData),
+      headers,
+      body: JSON.stringify(data),
     });
+    return this.handleResponse<{ message: string }>(response);
   }
 
-  async bulkUpdateVoters(updates: BulkUpdateItem[]): Promise<Voter[]> {
-    return this.request<Voter[]>('/voters/bulk', {
-      method: 'PUT',
-      body: JSON.stringify({ updates }),
+  // Export data
+  async exportData(): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/export`, {
+      headers: this.getAuthHeaders(),
     });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+    
+    return response.blob();
   }
 
-  async deleteVoter(id: string): Promise<{ message: string }> {
-    return this.request<{ message: string }>(`/voters/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async getFilterOptions(): Promise<FilterOptions> {
-    return this.request<FilterOptions>('/filter-options');
-  }
-
-  async getMasterFilterOptions(): Promise<{
-    parliaments: number[];
-    assemblies: string[];
-    districts: string[];
-    blocks: string[];
-    tehsils: string[];
-  }> {
-    return this.request<{
-      parliaments: number[];
-      assemblies: string[];
-      districts: string[];
-      blocks: string[];
-      tehsils: string[];
-    }>('/master-filter-options');
-  }
-
-  async seedSampleData(): Promise<{ message: string }> {
-    return this.request<{ message: string }>('/seed-data', {
+  // Save data (bulk update)
+  async saveData(voters: Voter[]): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/save`, {
       method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ voters }),
     });
+    return this.handleResponse<{ message: string }>(response);
   }
 
+  // Lock data
+  async lockData(voterIds: number[]): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/lock`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ voterIds }),
+    });
+    return this.handleResponse<{ message: string }>(response);
+  }
 
+  // Health check
+  async healthCheck(): Promise<{ status: string; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/health`);
+    return this.handleResponse<{ status: string; message: string }>(response);
+  }
 }
 
-export const apiService = new ApiService(); 
+export const apiService = new ApiService();

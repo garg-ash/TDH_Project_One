@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { apiService, FilterOptions, FilterParams } from '../services/api';
-import { Filter as FilterIcon, X, ChevronDown, ChevronUp, Search } from 'lucide-react';
+import { Filter as FilterIcon, X, ChevronDown, ChevronUp, Search, Play } from 'lucide-react';
 
 interface FilterProps {
   onFilterChange: (filters: FilterParams) => void;
@@ -84,9 +84,11 @@ function SearchableSelect({
 
   return (
     <div className="relative" data-dropdown-id={id}>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        {label}
-      </label>
+      {label && (
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {label}
+        </label>
+      )}
       <div className="relative">
         <button
           type="button"
@@ -151,13 +153,20 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
   const [patwarCircleFilter, setpatwarCircleFilter] = useState('');
   const [lrCircleFilter, setlrCircleFilter] = useState('');
   const [dobFilter, setdobFilter] = useState('');
-  const [ageFilter, setageFilter] = useState('');
+  const [ageFromFilter, setageFromFilter] = useState('');
+  const [ageToFilter, setageToFilter] = useState('');
   const [nameFilter, setnameFilter] = useState('');
   const [fnameFilter, setfnameFilter] = useState('');
   const [hnoFilter, sethnoFilter] = useState('');
   const [malefemaleFilter, setmalefemaleFilter] = useState('');
-  const [mobileFilter, setmobileFilter] = useState('');
-  const [castFilter, setcastFilter] = useState('');
+  const [mobile1Filter, setmobile1Filter] = useState('');
+  const [mobile2Filter, setmobile2Filter] = useState('');
+  const [castIdFilter, setcastIdFilter] = useState('');
+  const [castTypeFilter, setcastTypeFilter] = useState('');
+  const [motherNameFilter, setmotherNameFilter] = useState('');
+  const [surnameFilter, setsurnameFilter] = useState('');
+  const [religionFilter, setreligionFilter] = useState('');
+  const [categoryFilter, setcategoryFilter] = useState('');
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
@@ -172,16 +181,53 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
     fnames: [],
     hnos: [],
     malefemales: [],
-    castTypes: []
+    castTypes: [],
+    motherNames: [],
+    addresses: [],
+    surnames: [],
+    religions: [],
+    categories: []
   });
   const [loadingOptions, setLoadingOptions] = useState(true);
+
+  // Function to calculate age from date of birth
+  const calculateAge = (dateOfBirth: string): number => {
+    if (!dateOfBirth) return 0;
+    
+    const today = new Date();
+    const birthDate = new Date(dateOfBirth);
+    
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
+  };
+
+  // // Handle DOB change and automatically calculate age
+  // const handleDobChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   const dobValue = e.target.value;
+  //   setdobFilter(dobValue);
+    
+  //   if (dobValue) {
+  //     const calculatedAge = calculateAge(dobValue);
+  //     setageFromFilter(calculatedAge.toString());
+  //     setageToFilter(calculatedAge.toString());
+  //   } else {
+  //     setageFromFilter('');
+  //     setageToFilter('');
+  //   }
+  // };
 
   // Fetch filter options on component mount
   useEffect(() => {
     const fetchFilterOptions = async () => {
       try {
         setLoadingOptions(true);
-        const options = await apiService.getFilterOptions();
+        const options = await apiService.fetchFilterOptions();
         setFilterOptions(options);
       } catch (error) {
         console.error('Failed to fetch filter options:', error);
@@ -193,58 +239,75 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
     fetchFilterOptions();
   }, []);
 
-  // Apply filters when any filter changes
-  useEffect(() => {
+ 
+  // Function to apply filters when Go button is clicked
+  const handleApplyFilters = () => {
     const filters: FilterParams = {
-      villageCode: villageCode || undefined,
-      sectionFilter: SectionFilter || undefined,
-      villageNameFilter: villageNameFilter || undefined,
-      gramPanchayatFilter: gramPanchayatFilter || undefined,
-      patwarCircleFilter: patwarCircleFilter || undefined,
-      lrCircleFilter: lrCircleFilter || undefined,
-      dobFilter: dobFilter || undefined,
-      ageFilter: ageFilter || undefined,
-      nameFilter: nameFilter || undefined,
-      fnameFilter: fnameFilter || undefined,
-      hnoFilter: hnoFilter || undefined,
-      malefemaleFilter: malefemaleFilter || undefined,
-      mobileFilter: mobileFilter || undefined,
-      castFilter: castFilter || undefined,
+      // villageCode: villageCode || undefined,
+      // sectionFilter: SectionFilter || undefined,
+      // patwarCircleFilter: patwarCircleFilter || undefined,
+      // lrCircleFilter: lrCircleFilter || undefined,
+      // hnoFilter: hnoFilter || undefined,
+      
+      village: villageNameFilter || undefined,
+      tehsil: gramPanchayatFilter || undefined,
+      dateOfBirth: dobFilter || undefined,
+      ageMin: parseInt(ageFromFilter) || undefined,
+      ageMax: parseInt(ageToFilter) || undefined,
+      name: nameFilter || undefined,
+      fname: fnameFilter || undefined,
+      malefemale: malefemaleFilter || undefined,
+      mobile1: mobile1Filter || undefined,
+      mobile2: mobile2Filter || undefined,
+      castId: castIdFilter || undefined,
+      castIda: castIdFilter || undefined,
+      castTypeFilter: castTypeFilter || undefined,
+      motherNameFilter: motherNameFilter || undefined,
+      surnameFilter: surnameFilter || undefined,
+      religionFilter: religionFilter || undefined,
+      categoryFilter: categoryFilter || undefined,
     };
 
     onFilterChange(filters);
-  }, [
-    villageCode, SectionFilter, villageNameFilter, gramPanchayatFilter,
-    patwarCircleFilter, lrCircleFilter, dobFilter, ageFilter, nameFilter,
-    fnameFilter, hnoFilter, malefemaleFilter, mobileFilter, castFilter,
-    onFilterChange
-  ]);
+  };
 
   const clearAllFilters = () => {
-    setvillageCode('');
-    setSectionFilter('');
+    // setvillageCode('');
+    // setSectionFilter('');
+    // setpatwarCircleFilter('');
+    // setlrCircleFilter('');
+    // sethnoFilter('');
     setvillageNameFilter('');
-    setgramPanchayatFilter('');
-    setpatwarCircleFilter('');
-    setlrCircleFilter('');
+    setgramPanchayatFilter(''); 
     setdobFilter('');
-    setageFilter('');
+    setageFromFilter('');
+    setageToFilter('');
     setnameFilter('');
     setfnameFilter('');
-    sethnoFilter('');
     setmalefemaleFilter('');
-    setmobileFilter('');
-    setcastFilter('');
+    setmobile1Filter('');
+    setmobile2Filter('');
+    setcastIdFilter('');
+    setcastTypeFilter('');
+    setmotherNameFilter('');
+    setsurnameFilter('');
+    setreligionFilter('');
+    setcategoryFilter('');
+    
+    // Apply empty filters
+    onFilterChange({});
   };
 
   const hasActiveFilters = villageCode || SectionFilter || villageNameFilter || 
     gramPanchayatFilter || patwarCircleFilter || lrCircleFilter || 
-    dobFilter || ageFilter || nameFilter || fnameFilter || 
-    hnoFilter || malefemaleFilter || mobileFilter || castFilter;
+    dobFilter || ageFromFilter || ageToFilter || nameFilter || fnameFilter || 
+    hnoFilter || malefemaleFilter || mobile1Filter || mobile2Filter || 
+    castIdFilter || castTypeFilter || motherNameFilter || surnameFilter || 
+    religionFilter || categoryFilter;
 
   return (
     <div className="bg-gray-50 border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-7xl mx-auto px-6 py-3">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
@@ -255,6 +318,8 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
           </div>
           
           <div className="flex items-center space-x-3">
+           
+            
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
@@ -280,27 +345,15 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
 
         {/* Filter Grid */}
         <div className="space-y-6">
-          {/* Primary Filters */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+          {/* First Row - Primary Filters */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
             <SearchableSelect
-              id="section"
-              value={SectionFilter}
-              onChange={setSectionFilter}
-              options={filterOptions.sections}
-              placeholder="सभी"
-              label="अनुभाग"
-              disabled={loadingOptions}
-              activeDropdown={activeDropdown}
-              onDropdownToggle={setActiveDropdown}
-            />
-            
-            <SearchableSelect
-              id="villageName"
+              id="gram"
               value={villageNameFilter}
               onChange={setvillageNameFilter}
               options={filterOptions.villageNames}
-              placeholder="सभी"
-              label="गाँव का नाम"
+              placeholder="ग्राम"
+              label=""
               disabled={loadingOptions}
               activeDropdown={activeDropdown}
               onDropdownToggle={setActiveDropdown}
@@ -311,134 +364,190 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
               value={gramPanchayatFilter}
               onChange={setgramPanchayatFilter}
               options={filterOptions.gramPanchayats}
-              placeholder="सभी"
-              label="ग्राम पंचायत"
+              placeholder="ग्राम पंचायत (GP)"
+              label=""
               disabled={loadingOptions}
               activeDropdown={activeDropdown}
               onDropdownToggle={setActiveDropdown}
             />
             
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Enter Cast Id"
+                value={castIdFilter}
+                onChange={(e) => setcastIdFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                disabled={loading}
+              />
+            </div>
+            
             <SearchableSelect
-              id="patwarCircle"
-              value={patwarCircleFilter}
-              onChange={setpatwarCircleFilter}
-              options={filterOptions.patwarCircles}
-              placeholder="सभी"
-              label="पटवार मंडल"
+              id="castIDE"
+              value={castTypeFilter}
+              onChange={setcastTypeFilter}
+              options={filterOptions.castTypes}
+              placeholder="Cast IDE"
+              label=""
               disabled={loadingOptions}
               activeDropdown={activeDropdown}
               onDropdownToggle={setActiveDropdown}
             />
             
-            <SearchableSelect
-              id="lrCircle"
-              value={lrCircleFilter}
-              onChange={setlrCircleFilter}
-              options={filterOptions.lrCircles}
-              placeholder="सभी"
-              label="ILR Circle"
-              disabled={loadingOptions}
-              activeDropdown={activeDropdown}
-              onDropdownToggle={setActiveDropdown}
-            />
+            <div className="relative">
+              <input
+                type="number"
+                placeholder="Enter mobile 1"
+                value={mobile1Filter}
+                onChange={(e) => setmobile1Filter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                disabled={loading}
+              />
+            </div>
             
-            <SearchableSelect
-              id="dob"
-              value={dobFilter}
-              onChange={setdobFilter}
-              options={[]} // Add date options if needed
-              placeholder="सभी"
-              label="जन्म तिथि"
-              disabled={loadingOptions}
-              activeDropdown={activeDropdown}
-              onDropdownToggle={setActiveDropdown}
-            />
+            <div className="relative">
+              <input
+                type="number"
+                placeholder="Enter mobile 2"
+                value={mobile2Filter}
+                onChange={(e) => setmobile2Filter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                disabled={loading}
+              />
+            </div>
             
-            <SearchableSelect
-              id="age"
-              value={ageFilter}
-              onChange={setageFilter}
-              options={filterOptions.ages}
-              placeholder="सभी"
-              label="उम्र"
-              disabled={loadingOptions}
-              activeDropdown={activeDropdown}
-              onDropdownToggle={setActiveDropdown}
-            />
-
-            <SearchableSelect
-              id="name"
-              value={nameFilter}
-              onChange={setnameFilter}
-              options={filterOptions.names}
-              placeholder="सभी"
-              label="नाम"
-              disabled={loadingOptions}
-              activeDropdown={activeDropdown}
-              onDropdownToggle={setActiveDropdown}
-            />
+            <div className="relative">
+              <div className="flex space-x-2">
+                <input
+                  type="number"
+                  placeholder="From"
+                  value={ageFromFilter}
+                  onChange={(e) => setageFromFilter(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                  disabled={loading}
+                  min="0"
+                  max="150"
+                />
+                <span className="flex items-center text-gray-500">to</span>
+                <input
+                  type="number"
+                  placeholder="To"
+                  value={ageToFilter}
+                  onChange={(e) => setageToFilter(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                  disabled={loading}
+                  min="0"
+                  max="150"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Additional Filters (Hidden by default) */}
+          {/* Second Row - Additional Filters */}
           {showMoreFilters && (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 pt-4 border-t border-gray-200">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 pt-4 border-t border-gray-200">
+              <div className="relative">
+                <input
+                  type="date"
+                  placeholder="Select date"
+                  value={dobFilter}
+                  onChange={handleDobChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                  disabled={loading}
+                />
+              </div>
+              
+              <SearchableSelect
+                id="name"
+                value={nameFilter}
+                onChange={setnameFilter}
+                options={filterOptions.names}
+                placeholder="नाम"
+                label=""
+                disabled={loadingOptions}
+                activeDropdown={activeDropdown}
+                onDropdownToggle={setActiveDropdown}
+              />
+              
               <SearchableSelect
                 id="fname"
                 value={fnameFilter}
                 onChange={setfnameFilter}
                 options={filterOptions.fnames}
-                placeholder="सभी"
-                label="पिता का नाम"
+                placeholder="पिता का नाम"
+                label=""
                 disabled={loadingOptions}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
-
+              
               <SearchableSelect
-                id="hno"
+                id="motherName"
+                value={motherNameFilter}
+                onChange={setmotherNameFilter}
+                options={filterOptions.motherNames || []}
+                placeholder="माता का नाम"
+                label=""
+                disabled={loadingOptions}
+                activeDropdown={activeDropdown}
+                onDropdownToggle={setActiveDropdown}
+              />
+              
+              <SearchableSelect
+                id="address"
                 value={hnoFilter}
                 onChange={sethnoFilter}
-                options={filterOptions.hnos}
-                placeholder="सभी"
-                label="गृह सं"
+                options={filterOptions.addresses || []}
+                placeholder="पता"
+                label=""
                 disabled={loadingOptions}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
-
+              
               <SearchableSelect
-                id="malefemale"
+                id="surname"
+                value={surnameFilter}
+                onChange={setsurnameFilter}
+                options={filterOptions.surnames || []}
+                placeholder="उपनाम"
+                label=""
+                disabled={loadingOptions}
+                activeDropdown={activeDropdown}
+                onDropdownToggle={setActiveDropdown}
+              />
+              
+              <SearchableSelect
+                id="gender"
                 value={malefemaleFilter}
                 onChange={setmalefemaleFilter}
                 options={filterOptions.malefemales}
-                placeholder="सभी"
-                label="पुरुष / महिला"
+                placeholder="लिंग"
+                label=""
                 disabled={loadingOptions}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  मोबाइल नंबर
-                </label>
-                <input 
-                  type="number" 
-                  placeholder="Enter mobile number" 
-                  value={mobileFilter} 
-                  onChange={(e)=> setmobileFilter(e.target.value)} 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
-                  disabled={loading}
-                />
-              </div>
-
+              
               <SearchableSelect
-                id="cast"
-                value={castFilter}
-                onChange={setcastFilter}
-                options={filterOptions.castTypes}
-                placeholder="सभी"
-                label="जाति"
+                id="religion"
+                value={religionFilter}
+                onChange={setreligionFilter}
+                options={filterOptions.religions || []}
+                placeholder="धर्म"
+                label=""
+                disabled={loadingOptions}
+                activeDropdown={activeDropdown}
+                onDropdownToggle={setActiveDropdown}
+              />
+              
+              <SearchableSelect
+                id="category"
+                value={categoryFilter}
+                onChange={setcategoryFilter}
+                options={filterOptions.categories || []}
+                placeholder="श्रेणी"
+                label=""
                 disabled={loadingOptions}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
@@ -446,23 +555,49 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
             </div>
           )}
           
-          <button
-            onClick={() => setShowMoreFilters(!showMoreFilters)}
-            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm"
-            disabled={loading}
-          >
-            {showMoreFilters ? (
-              <>
-                <ChevronUp size={16} />
-                <span>Show Less</span>
-              </>
-            ) : (
-              <>
-                <ChevronDown size={16} />
-                <span>Show More</span>
-              </>
-            )}
-          </button>
+          {/* Button Row */}
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setShowMoreFilters(!showMoreFilters)}
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm"
+              disabled={loading}
+            >
+              {showMoreFilters ? (
+                <>
+                  <ChevronUp size={16} />
+                  <span>Show Less</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown size={16} />
+                  <span>Show More</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleApplyFilters}
+              className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm cursor-pointer"
+              disabled={loading}
+            >
+              <Play size={16} />
+              <span>Go</span>
+            </button>
+          </div>
+
+          {/* Filter Status */}
+          {hasActiveFilters && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Filters ready to apply: {[villageCode, SectionFilter, villageNameFilter, gramPanchayatFilter, patwarCircleFilter, lrCircleFilter, dobFilter, ageFromFilter, ageToFilter, nameFilter, fnameFilter, hnoFilter, malefemaleFilter, mobile1Filter, mobile2Filter, castIdFilter, castTypeFilter, motherNameFilter, surnameFilter, religionFilter, categoryFilter].filter(Boolean).length} selected
+                </div>
+                <div className="text-xs text-gray-500">
+                  Click "Go" to apply filters
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
