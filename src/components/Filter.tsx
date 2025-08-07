@@ -146,12 +146,8 @@ function SearchableSelect({
 }
 
 export default function Filter({ onFilterChange, loading = false }: FilterProps) {
-  const [villageCode, setvillageCode] = useState('');
-  const [SectionFilter, setSectionFilter] = useState('');
   const [villageNameFilter, setvillageNameFilter] = useState('');
   const [gramPanchayatFilter, setgramPanchayatFilter] = useState('');
-  const [patwarCircleFilter, setpatwarCircleFilter] = useState('');
-  const [lrCircleFilter, setlrCircleFilter] = useState('');
   const [dobFilter, setdobFilter] = useState('');
   const [ageFromFilter, setageFromFilter] = useState('');
   const [ageToFilter, setageToFilter] = useState('');
@@ -207,20 +203,20 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
     return age;
   };
 
-  // // Handle DOB change and automatically calculate age
-  // const handleDobChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   const dobValue = e.target.value;
-  //   setdobFilter(dobValue);
+  // Handle DOB change and automatically calculate age
+  const handleDobChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const dobValue = e.target.value;
+    setdobFilter(dobValue);
     
-  //   if (dobValue) {
-  //     const calculatedAge = calculateAge(dobValue);
-  //     setageFromFilter(calculatedAge.toString());
-  //     setageToFilter(calculatedAge.toString());
-  //   } else {
-  //     setageFromFilter('');
-  //     setageToFilter('');
-  //   }
-  // };
+    if (dobValue) {
+      const calculatedAge = calculateAge(dobValue);
+      setageFromFilter(calculatedAge.toString());
+      setageToFilter(calculatedAge.toString());
+    } else {
+      setageFromFilter('');
+      setageToFilter('');
+    }
+  };
 
   // Fetch filter options on component mount
   useEffect(() => {
@@ -243,41 +239,26 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
   // Function to apply filters when Go button is clicked
   const handleApplyFilters = () => {
     const filters: FilterParams = {
-      // villageCode: villageCode || undefined,
-      // sectionFilter: SectionFilter || undefined,
-      // patwarCircleFilter: patwarCircleFilter || undefined,
-      // lrCircleFilter: lrCircleFilter || undefined,
-      // hnoFilter: hnoFilter || undefined,
-      
-      village: villageNameFilter || undefined,
+      village: villageNameFilter || hnoFilter || undefined,
       tehsil: gramPanchayatFilter || undefined,
       dateOfBirth: dobFilter || undefined,
       ageMin: parseInt(ageFromFilter) || undefined,
       ageMax: parseInt(ageToFilter) || undefined,
       name: nameFilter || undefined,
       fname: fnameFilter || undefined,
-      malefemale: malefemaleFilter || undefined,
       mobile1: mobile1Filter || undefined,
       mobile2: mobile2Filter || undefined,
       castId: castIdFilter || undefined,
       castIda: castIdFilter || undefined,
-      castTypeFilter: castTypeFilter || undefined,
-      motherNameFilter: motherNameFilter || undefined,
-      surnameFilter: surnameFilter || undefined,
-      religionFilter: religionFilter || undefined,
-      categoryFilter: categoryFilter || undefined,
+      booth: undefined, // Not used in current filters
     };
 
     onFilterChange(filters);
   };
 
   const clearAllFilters = () => {
-    // setvillageCode('');
-    // setSectionFilter('');
-    // setpatwarCircleFilter('');
-    // setlrCircleFilter('');
-    // sethnoFilter('');
     setvillageNameFilter('');
+    sethnoFilter('');
     setgramPanchayatFilter(''); 
     setdobFilter('');
     setageFromFilter('');
@@ -298,10 +279,10 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
     onFilterChange({});
   };
 
-  const hasActiveFilters = villageCode || SectionFilter || villageNameFilter || 
-    gramPanchayatFilter || patwarCircleFilter || lrCircleFilter || 
+  const hasActiveFilters = villageNameFilter || hnoFilter ||
+    gramPanchayatFilter || 
     dobFilter || ageFromFilter || ageToFilter || nameFilter || fnameFilter || 
-    hnoFilter || malefemaleFilter || mobile1Filter || mobile2Filter || 
+    malefemaleFilter || mobile1Filter || mobile2Filter || 
     castIdFilter || castTypeFilter || motherNameFilter || surnameFilter || 
     religionFilter || categoryFilter;
 
@@ -590,7 +571,7 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
             <div className="mt-4 pt-4 border-t border-gray-200">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-gray-600">
-                  Filters ready to apply: {[villageCode, SectionFilter, villageNameFilter, gramPanchayatFilter, patwarCircleFilter, lrCircleFilter, dobFilter, ageFromFilter, ageToFilter, nameFilter, fnameFilter, hnoFilter, malefemaleFilter, mobile1Filter, mobile2Filter, castIdFilter, castTypeFilter, motherNameFilter, surnameFilter, religionFilter, categoryFilter].filter(Boolean).length} selected
+                  Filters ready to apply: {[villageNameFilter, hnoFilter, gramPanchayatFilter, dobFilter, ageFromFilter, ageToFilter, nameFilter, fnameFilter, malefemaleFilter, mobile1Filter, mobile2Filter, castIdFilter, castTypeFilter, motherNameFilter, surnameFilter, religionFilter, categoryFilter].filter(Boolean).length} selected
                 </div>
                 <div className="text-xs text-gray-500">
                   Click "Go" to apply filters
