@@ -1,16 +1,49 @@
 'use client';
 
-import { useState } from 'react';
-import { ArrowRight, Settings } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowRight, Settings, LogOut } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import DataTable from '../components/DataTable';
 import Filter from '../components/Filter';
 import MasterFilter from '../components/MasterFilter';
 
+interface UserInfo {
+  id: number;
+  email: string;
+  role: string;
+  name?: string;
+}
+
 export default function HomePage() {
   const [showModules, setShowModules] = useState(true);
   const [selectedModule, setSelectedModule] = useState('');
   const [loading, setLoading] = useState(false);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    const userInfoStr = localStorage.getItem('userInfo');
+    
+    if (token && userInfoStr) {
+      try {
+        const user = JSON.parse(userInfoStr);
+        setUserInfo(user);
+        setIsAuthenticated(true);
+      } catch (error) {
+        console.error('Error parsing user info:', error);
+        handleLogout();
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userInfo');
+    setIsAuthenticated(false);
+    setUserInfo(null);
+    window.location.href = '/login';
+  };
 
   const modules = [
     {
@@ -50,6 +83,41 @@ export default function HomePage() {
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         <Navbar />
         
+        {/* User Info Header */}
+        <div className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-3">
+                  <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
+                    <span className="text-sm font-medium text-gray-700">
+                      {userInfo?.name ? userInfo.name.charAt(0).toUpperCase() : userInfo?.email.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{userInfo?.name || 'User'}</p>
+                    <p className="text-xs text-gray-500">{userInfo?.email}</p>
+                  </div>
+                </div>
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                  userInfo?.role === 'admin' 
+                    ? 'bg-red-100 text-red-800' 
+                    : 'bg-green-100 text-green-800'
+                }`}>
+                  {userInfo?.role}
+                </span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+        
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="text-center py-8">
@@ -60,7 +128,7 @@ export default function HomePage() {
               Election Management System
             </h1>
             <p className="text-gray-600 text-lg">
-              Select a module to get started
+              Welcome back, {userInfo?.name || userInfo?.email}! Select a module to get started
             </p>
           </div>
 
@@ -70,7 +138,10 @@ export default function HomePage() {
               <div
                 key={module.id}
                 className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg hover:border-gray-300 transition-all duration-300 h-full group cursor-pointer"
-                onClick={module.id === 'dataset' ? handleDataSetClick : handleMobileSetupClick}
+                onClick={
+                  module.id === 'dataset' ? handleDataSetClick : 
+                  handleMobileSetupClick
+                }
               >
                 <div className="p-6 flex flex-col items-center justify-center h-full">
                   <div className="bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-gray-200 w-16 h-16 mb-4">

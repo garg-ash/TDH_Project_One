@@ -2,9 +2,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, Shield, User } from 'lucide-react';
+import { apiService } from '../../services/api';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -62,17 +65,22 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Simulate form submission
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await apiService.login(formData);
       
-      setMessage('Login successful! Welcome back.');
-      setFormData({
-        email: '',
-        password: '',
-        role: ''
-      });
-    } catch (error) {
-      setMessage('Invalid email or password. Please try again.');
+      // Store token and user info in localStorage
+      localStorage.setItem('authToken', response.token);
+      localStorage.setItem('userInfo', JSON.stringify(response.user));
+      
+      setMessage('Login successful! Redirecting...');
+      
+      // Redirect to main application after a short delay
+      setTimeout(() => {
+        router.push('/');
+      }, 1000);
+      
+    } catch (error: any) {
+      console.error('Login error:', error);
+      setMessage(error.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }

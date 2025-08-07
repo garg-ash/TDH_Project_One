@@ -104,7 +104,35 @@ export interface LoginResponse {
     id: number;
     email: string;
     role: string;
+    name?: string;
   };
+}
+
+// Admin User Management Interfaces
+export interface User {
+  id: number;
+  email: string;
+  role: string;
+  name?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CreateUserData {
+  email: string;
+  password: string;
+  role: string;
+  name?: string;
+}
+
+export interface UpdateUserData {
+  email: string;
+  role: string;
+  name?: string;
+}
+
+export interface ChangePasswordData {
+  newPassword: string;
 }
 
 class ApiService {
@@ -112,7 +140,7 @@ class ApiService {
     const token = localStorage.getItem('authToken');
     return {
       'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
+      'Authorization': `Bearer ${token}`
     };
   }
 
@@ -128,9 +156,7 @@ class ApiService {
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(credentials),
     });
     return this.handleResponse<LoginResponse>(response);
@@ -148,7 +174,7 @@ class ApiService {
     return this.handleResponse<FilterOptions>(response);
   }
 
-  // Get voters with filters and pagination
+  // Voters
   async getVoters(
     page: number = 1,
     limit: number = 500,
@@ -157,13 +183,9 @@ class ApiService {
     const params = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),
-    });
-    
-    // Add filter parameters
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        params.append(key, value.toString());
-      }
+      ...Object.fromEntries(
+        Object.entries(filters).filter(([_, value]) => value !== undefined && value !== '')
+      )
     });
 
     const response = await fetch(`${API_BASE_URL}/voters?${params}`);
@@ -173,8 +195,8 @@ class ApiService {
   // Update voter
   async updateVoter(id: number, voterData: Partial<Voter>): Promise<{ message: string }> {
     const token = localStorage.getItem('authToken');
-    const endpoint = token ? `/voters/${id}` : `/voters/${id}/demo`;
-    const headers = token ? this.getAuthHeaders() : { 'Content-Type': 'application/json' };
+    const endpoint = token ? `/voters/${id}` : `/voters/${id}/demo`; // Dynamic endpoint
+    const headers = token ? this.getAuthHeaders() : { 'Content-Type': 'application/json' }; // Dynamic headers
     
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PUT',
@@ -184,9 +206,14 @@ class ApiService {
     return this.handleResponse<{ message: string }>(response);
   }
 
-  // Get surname data
+  // Surname data
   async getSurnameData(filters: { name?: string; fname?: string; mname?: string } = {}): Promise<SurnameData[]> {
-    const params = new URLSearchParams(filters);
+    const params = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(filters).filter(([_, value]) => value !== undefined && value !== '')
+      )
+    );
+
     const response = await fetch(`${API_BASE_URL}/surname-data?${params}`);
     return this.handleResponse<SurnameData[]>(response);
   }
@@ -194,8 +221,8 @@ class ApiService {
   // Update surname data
   async updateSurnameData(id: number, data: { surname: string; castId: string; castIda: string }): Promise<{ message: string }> {
     const token = localStorage.getItem('authToken');
-    const endpoint = token ? `/surname-data/${id}` : `/surname-data/${id}/demo`;
-    const headers = token ? this.getAuthHeaders() : { 'Content-Type': 'application/json' };
+    const endpoint = token ? `/surname-data/${id}` : `/surname-data/${id}/demo`; // Dynamic endpoint
+    const headers = token ? this.getAuthHeaders() : { 'Content-Type': 'application/json' }; // Dynamic headers
     
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PUT',
@@ -212,14 +239,13 @@ class ApiService {
     });
     
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
     
     return response.blob();
   }
 
-  // Save data (bulk update)
+  // Save data
   async saveData(voters: Voter[]): Promise<{ message: string }> {
     const response = await fetch(`${API_BASE_URL}/save`, {
       method: 'POST',
@@ -243,6 +269,49 @@ class ApiService {
   async healthCheck(): Promise<{ status: string; message: string }> {
     const response = await fetch(`${API_BASE_URL}/health`);
     return this.handleResponse<{ status: string; message: string }>(response);
+  }
+
+  // Admin User Management Methods
+  async getAllUsers(): Promise<User[]> {
+    const response = await fetch(`${API_BASE_URL}/admin/users`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<User[]>(response);
+  }
+
+  async createUser(userData: CreateUserData): Promise<{ message: string; user: User }> {
+    const response = await fetch(`${API_BASE_URL}/admin/users`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(userData),
+    });
+    return this.handleResponse<{ message: string; user: User }>(response);
+  }
+
+  async updateUser(id: number, userData: UpdateUserData): Promise<{ message: string; user: User }> {
+    const response = await fetch(`${API_BASE_URL}/admin/users/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(userData),
+    });
+    return this.handleResponse<{ message: string; user: User }>(response);
+  }
+
+  async deleteUser(id: number): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/admin/users/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<{ message: string }>(response);
+  }
+
+  async changeUserPassword(id: number, passwordData: ChangePasswordData): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/admin/users/${id}/change-password`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(passwordData),
+    });
+    return this.handleResponse<{ message: string }>(response);
   }
 }
 
