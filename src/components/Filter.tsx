@@ -288,9 +288,9 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
 
   return (
     <div className="bg-gray-50 border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-6 py-3">
+      <div className="w-full px-3 py-3">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             {/* <div className="p-2 bg-gray-200 rounded-lg">
               <FilterIcon size={20} className="text-gray-600" />
@@ -301,6 +301,7 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
           <div className="flex items-center space-x-3">
            
             
+             
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
@@ -325,108 +326,143 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
         )}
 
         {/* Filter Grid */}
-        <div className="space-y-6">
-          {/* First Row - Primary Filters */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-            <SearchableSelect
-              id="gram"
-              value={villageNameFilter}
-              onChange={setvillageNameFilter}
-              options={filterOptions.villageNames}
-              placeholder="ग्राम"
-              label=""
-              disabled={loadingOptions}
-              activeDropdown={activeDropdown}
-              onDropdownToggle={setActiveDropdown}
-            />
-            
-            <SearchableSelect
-              id="gramPanchayat"
-              value={gramPanchayatFilter}
-              onChange={setgramPanchayatFilter}
-              options={filterOptions.gramPanchayats}
-              placeholder="ग्राम पंचायत (GP)"
-              label=""
-              disabled={loadingOptions}
-              activeDropdown={activeDropdown}
-              onDropdownToggle={setActiveDropdown}
-            />
-            
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Enter Cast Id"
-                value={castIdFilter}
-                onChange={(e) => setcastIdFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
-                disabled={loading}
+        <div className="space-y-4">
+          {/* First Row - Primary Filters with Buttons on Right */}
+          <div className="flex items-start space-x-4">
+            {/* Filter Fields Grid */}
+            <div className="flex-1 grid grid-cols-2 md:grid-cols-6 lg:grid-cols-8 gap-3">
+              <SearchableSelect
+                id="gram"
+                value={villageNameFilter}
+                onChange={setvillageNameFilter}
+                options={filterOptions.villageNames}
+                placeholder="ग्राम"
+                label=""
+                disabled={loadingOptions}
+                activeDropdown={activeDropdown}
+                onDropdownToggle={setActiveDropdown}
               />
-            </div>
-            
-            <SearchableSelect
-              id="castIDE"
-              value={castTypeFilter}
-              onChange={setcastTypeFilter}
-              options={filterOptions.castTypes}
-              placeholder="Cast IDE"
-              label=""
-              disabled={loadingOptions}
-              activeDropdown={activeDropdown}
-              onDropdownToggle={setActiveDropdown}
-            />
-            
-            <div className="relative">
-              <input
-                type="number"
-                placeholder="Enter mobile 1"
-                value={mobile1Filter}
-                onChange={(e) => setmobile1Filter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
-                disabled={loading}
+              
+              <SearchableSelect
+                id="gramPanchayat"
+                value={gramPanchayatFilter}
+                onChange={setgramPanchayatFilter}
+                options={filterOptions.gramPanchayats}
+                placeholder="ग्राम पंचायत (GP)"
+                label=""
+                disabled={loadingOptions}
+                activeDropdown={activeDropdown}
+                onDropdownToggle={setActiveDropdown}
               />
-            </div>
-            
-            <div className="relative">
-              <input
-                type="number"
-                placeholder="Enter mobile 2"
-                value={mobile2Filter}
-                onChange={(e) => setmobile2Filter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
-                disabled={loading}
-              />
-            </div>
-            
-            <div className="relative">
-              <div className="flex space-x-2">
+              
+              <div className="relative">
                 <input
-                  type="number"
-                  placeholder="From"
-                  value={ageFromFilter}
-                  onChange={(e) => setageFromFilter(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                  type="text"
+                  placeholder="Enter Cast Id"
+                  value={castIdFilter}
+                  onChange={(e) => setcastIdFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
                   disabled={loading}
-                  min="0"
-                  max="150"
-                />
-                <span className="flex items-center text-gray-500">to</span>
-                <input
-                  type="number"
-                  placeholder="To"
-                  value={ageToFilter}
-                  onChange={(e) => setageToFilter(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
-                  disabled={loading}
-                  min="0"
-                  max="150"
                 />
               </div>
+              
+              <SearchableSelect
+                id="castIDE"
+                value={castTypeFilter}
+                onChange={setcastTypeFilter}
+                options={filterOptions.castTypes}
+                placeholder="Cast Type"
+                label=""
+                disabled={loadingOptions}
+                activeDropdown={activeDropdown}
+                onDropdownToggle={setActiveDropdown}
+              />
+
+              <div className="relative">
+                <input
+                  type="number"
+                  placeholder="Enter mobile 1"
+                  value={mobile1Filter}
+                  onChange={(e) => setmobile1Filter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                  disabled={loading}
+                />
+              </div>
+              
+              <div className="relative">
+                <input
+                  type="number"
+                  placeholder="Enter mobile 2"
+                  value={mobile2Filter}
+                  onChange={(e) => setmobile2Filter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                  disabled={loading}
+                />
+              </div>
+              
+              <div className="relative">
+                <div className="flex space-x-2">
+                  <input
+                    type="number"
+                    placeholder="From"
+                    value={ageFromFilter}
+                    onChange={(e) => setageFromFilter(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                    disabled={loading}
+                    min="0"
+                    max="150"
+                  />
+                  <span className="flex items-center text-gray-500 text-sm">to</span>
+                  <input
+                    type="number"
+                    placeholder="To"
+                    value={ageToFilter}
+                    onChange={(e) => setageToFilter(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                    disabled={loading}
+                    min="0"
+                    max="150"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Buttons on Right Side */}
+            <div className="flex items-center space-x-3 flex-shrink-0">
+              {/* Show More/Less Button */}
+              <button
+                onClick={() => setShowMoreFilters(!showMoreFilters)}
+                className="flex items-center justify-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm"
+                disabled={loading}
+              >
+                {showMoreFilters ? (
+                  <>
+                    <ChevronUp size={16} />
+                    <span>Show Less</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown size={16} />
+                    <span>Show More</span>
+                  </>
+                )}
+              </button>
+
+              {/* Go Button */}
+              <button
+                onClick={handleApplyFilters}
+                className="flex items-center justify-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm cursor-pointer"
+                disabled={loading}
+              >
+                <Play size={16} />
+                <span>Go</span>
+              </button>
             </div>
           </div>
 
           {/* Second Row - Additional Filters */}
           {showMoreFilters && (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 pt-4 border-t border-gray-200">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 pt-3 border-t border-gray-200">
               <div className="relative">
                 <input
                   type="date"
@@ -468,18 +504,6 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
                 onChange={setmotherNameFilter}
                 options={filterOptions.motherNames || []}
                 placeholder="माता का नाम"
-                label=""
-                disabled={loadingOptions}
-                activeDropdown={activeDropdown}
-                onDropdownToggle={setActiveDropdown}
-              />
-              
-              <SearchableSelect
-                id="address"
-                value={hnoFilter}
-                onChange={sethnoFilter}
-                options={filterOptions.addresses || []}
-                placeholder="पता"
                 label=""
                 disabled={loadingOptions}
                 activeDropdown={activeDropdown}
@@ -535,40 +559,10 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
               />
             </div>
           )}
-          
-          {/* Button Row */}
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setShowMoreFilters(!showMoreFilters)}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm"
-              disabled={loading}
-            >
-              {showMoreFilters ? (
-                <>
-                  <ChevronUp size={16} />
-                  <span>Show Less</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown size={16} />
-                  <span>Show More</span>
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={handleApplyFilters}
-              className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm cursor-pointer"
-              disabled={loading}
-            >
-              <Play size={16} />
-              <span>Go</span>
-            </button>
-          </div>
 
           {/* Filter Status */}
           {hasActiveFilters && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="mt-3 pt-3 border-t border-gray-200">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-gray-600">
                   Filters ready to apply: {[villageNameFilter, hnoFilter, gramPanchayatFilter, dobFilter, ageFromFilter, ageToFilter, nameFilter, fnameFilter, malefemaleFilter, mobile1Filter, mobile2Filter, castIdFilter, castTypeFilter, motherNameFilter, surnameFilter, religionFilter, categoryFilter].filter(Boolean).length} selected

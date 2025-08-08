@@ -38,6 +38,14 @@ export default function SurnamePage() {
     mname: ''
   });
 
+  // Checkbox states for surname page form fields
+  const [nameChecked, setNameChecked] = useState(false);
+  const [fnameChecked, setFnameChecked] = useState(false);
+  const [mnameChecked, setMnameChecked] = useState(false);
+
+  // Dropdown state for count filter
+  const [countFilter, setCountFilter] = useState('');
+
   // Fetch surname data from API
   const fetchSurnameData = async (filters?: any) => {
     try {
@@ -181,39 +189,6 @@ export default function SurnamePage() {
           <div className="flex-1">
             <MasterFilter onMasterFilterChange={handleMasterFilterChange} />
           </div>
-          
-          {/* Action Buttons */}
-          <div className="flex items-center space-x-3 flex-shrink-0">
-            <button
-              onClick={() => console.log('Save clicked')}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-              </svg>
-              <span>Save</span>
-            </button>
-            
-            <button
-              onClick={() => console.log('Export clicked')}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <span>Export</span>
-            </button>
-            
-            <button
-              onClick={() => console.log('Lock clicked')}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              <span>Lock</span>
-            </button>
-          </div>
         </div>
       </div>
       
@@ -223,46 +198,114 @@ export default function SurnamePage() {
        <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
          <div className="max-w-7xl mx-auto">
            <div className="flex items-center space-x-4">
-                           <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                <input
-                  type="text"
-                  placeholder="Enter name"
-                  value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
-                />
-              </div>
-              
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fname</label>
-                <input
-                  type="text"
-                  placeholder="Enter father's name"
-                  value={formData.fname}
-                  onChange={(e) => handleInputChange('fname', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
-                />
-              </div>
-              
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mname</label>
-                <input
-                  type="text"
-                  placeholder="Enter mother's name"
-                  value={formData.mname}
-                  onChange={(e) => handleInputChange('mname', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
-                />
-              </div>
+             <div className="flex-1">
+               <div className="flex items-center space-x-2">
+                 <input
+                   type="text"
+                   placeholder="Enter name"
+                   value={formData.name}
+                   onChange={(e) => {
+                     handleInputChange('name', e.target.value);
+                     if (e.target.value && !nameChecked) {
+                       setNameChecked(true);
+                     }
+                   }}
+                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                 />
+                 <input
+                   type="checkbox"
+                   checked={nameChecked}
+                   onChange={(e) => {
+                     setNameChecked(e.target.checked);
+                     if (!e.target.checked) {
+                       setFormData(prev => ({ ...prev, name: '' }));
+                     }
+                   }}
+                   className="w-4 h-4 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500 focus:ring-2"
+                 />
+                 {/* <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Name</label> */}
+               </div>
+             </div>
+             
+             <div className="flex-1">
+               <div className="flex items-center space-x-2">
+                 <input
+                   type="text"
+                   placeholder="Enter father's name"
+                   value={formData.fname}
+                   onChange={(e) => {
+                     handleInputChange('fname', e.target.value);
+                     if (e.target.value && !fnameChecked) {
+                       setFnameChecked(true);
+                     }
+                   }}
+                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                 />
+                 <input
+                   type="checkbox"
+                   checked={fnameChecked}
+                   onChange={(e) => {
+                     setFnameChecked(e.target.checked);
+                     if (!e.target.checked) {
+                       setFormData(prev => ({ ...prev, fname: '' }));
+                     }
+                   }}
+                   className="w-4 h-4 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500 focus:ring-2"
+                 />
+                 {/* <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Fname</label> */}
+               </div>
+             </div>
+             
+             <div className="flex-1">
+               <div className="flex items-center space-x-2">
+                 <input
+                   type="text"
+                   placeholder="Enter mother's name"
+                   value={formData.mname}
+                   onChange={(e) => {
+                     handleInputChange('mname', e.target.value);
+                     if (e.target.value && !mnameChecked) {
+                       setMnameChecked(true);
+                     }
+                   }}
+                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                 />
+                 <input
+                   type="checkbox"
+                   checked={mnameChecked}
+                   onChange={(e) => {
+                     setMnameChecked(e.target.checked);
+                     if (!e.target.checked) {
+                       setFormData(prev => ({ ...prev, mname: '' }));
+                     }
+                   }}
+                   className="w-4 h-4 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500 focus:ring-2"
+                 />
+                 {/* <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Mname</label> */}
+               </div>
+             </div>
              
              <div className="flex items-end">
                <button
                  onClick={handleGoClick}
-                 className="px-6 py-2 mt-5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer"
+                 className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer"
                >
                  <span>Go</span>
                </button>
+             </div>
+             
+             <div className="flex items-end">
+               <select
+                 value={countFilter}
+                 onChange={(e) => setCountFilter(e.target.value)}
+                 className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+               >
+                 <option value="">Select Count</option>
+                 <option value="500">{'>'}500</option>
+                 <option value="1000">{'>'}1000</option>
+                 <option value="2000">{'>'}2000</option>
+                 <option value="5000">{'>'}5000</option>
+               </select>
              </div>
            </div>
          </div>
@@ -270,7 +313,7 @@ export default function SurnamePage() {
        
        {/* Data Table Section */}
        <div className="max-w-7xl mx-auto px-6 py-6">
-         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+         <div className="bg-white shadow-lg overflow-hidden">
            
                        <div className="overflow-x-auto">
               {loading && (
@@ -282,19 +325,19 @@ export default function SurnamePage() {
               <table className="w-full border-collapse">
                <thead className="bg-gray-200 border-b border-gray-300">
                  <tr>
-                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider border-r border-gray-300">
+                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider border-r border-gray-300 bg-gray-200">
                      S.No.
                    </th>
-                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider border-r border-gray-300">
+                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider border-r border-gray-300 bg-gray-200">
                      Surname
                    </th>
-                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider border-r border-gray-300">
+                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider border-r border-gray-300 bg-gray-200">
                      Count
                    </th>
-                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider border-r border-gray-300">
+                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider border-r border-gray-300 bg-gray-200">
                      Cast ID
                    </th>
-                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider">
+                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider bg-gray-200">
                      Cast IDA
                    </th>
                  </tr>
@@ -302,137 +345,147 @@ export default function SurnamePage() {
                                <tbody className="bg-white">
                   {surnameData.map((row, index) => (
                     <tr key={row.id} className="border-b border-gray-300 hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 text-sm text-gray-900 border-r border-gray-300">
-                        <div className="flex items-center space-x-2 bg-gray-200 px-2 py-1">
-                          <span className="text-gray-800 font-medium">{index + 1}</span>
-                        </div>
+                      <td className="px-4 py-3 text-sm text-gray-900 border-r border-gray-300 bg-gray-200">
+                        <span className="text-gray-800 font-medium">{index + 1}</span>
                       </td>
                       <td 
-                        className="px-4 py-3 text-sm text-gray-900 border-r border-gray-300 cursor-pointer hover:bg-blue-50"
+                        className="px-4 py-3 text-sm text-gray-900 border-r border-gray-300 cursor-pointer hover:bg-blue-50 focus:bg-blue-100 focus:outline-none"
                         onDoubleClick={() => handleCellDoubleClick(row.id, 'surname', row.surname)}
+                        tabIndex={0}
                       >
                         {editingCell?.rowId === row.id && editingCell?.field === 'surname' ? (
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-1">
                             <input
                               type="text"
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
                               onKeyDown={handleKeyDown}
                               onBlur={handleCellSave}
-                              className="flex-1 px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="flex-1 px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
                               autoFocus
                             />
                             <button
                               onClick={handleCellSave}
-                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                              title="Save (Enter)"
                             >
                               ✓
                             </button>
                             <button
                               onClick={handleCellCancel}
-                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                              title="Cancel (Esc)"
                             >
                               ✕
                             </button>
                           </div>
                         ) : (
-                          row.surname
+                          <span className="block w-full h-full">{row.surname}</span>
                         )}
                       </td>
                       <td 
-                        className="px-4 py-3 text-sm text-gray-900 border-r border-gray-300 cursor-pointer hover:bg-blue-50"
+                        className="px-4 py-3 text-sm text-gray-900 border-r border-gray-300 cursor-pointer hover:bg-blue-50 focus:bg-blue-100 focus:outline-none"
                         onDoubleClick={() => handleCellDoubleClick(row.id, 'count', row.count.toString())}
+                        tabIndex={0}
                       >
                         {editingCell?.rowId === row.id && editingCell?.field === 'count' ? (
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-1">
                             <input
                               type="number"
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
                               onKeyDown={handleKeyDown}
                               onBlur={handleCellSave}
-                              className="flex-1 px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="flex-1 px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
                               autoFocus
                             />
                             <button
                               onClick={handleCellSave}
-                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                              title="Save (Enter)"
                             >
                               ✓
                             </button>
                             <button
                               onClick={handleCellCancel}
-                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                              title="Cancel (Esc)"
                             >
                               ✕
                             </button>
                           </div>
                         ) : (
-                          row.count
+                          <span className="block w-full h-full">{row.count}</span>
                         )}
                       </td>
                       <td 
-                        className="px-4 py-3 text-sm text-gray-900 border-r border-gray-300 cursor-pointer hover:bg-blue-50"
+                        className="px-4 py-3 text-sm text-gray-900 border-r border-gray-300 cursor-pointer hover:bg-blue-50 focus:bg-blue-100 focus:outline-none"
                         onDoubleClick={() => handleCellDoubleClick(row.id, 'castId', row.castId)}
+                        tabIndex={0}
                       >
                         {editingCell?.rowId === row.id && editingCell?.field === 'castId' ? (
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-1">
                             <input
                               type="text"
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
                               onKeyDown={handleKeyDown}
                               onBlur={handleCellSave}
-                              className="flex-1 px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="flex-1 px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
                               autoFocus
                             />
                             <button
                               onClick={handleCellSave}
-                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                              title="Save (Enter)"
                             >
                               ✓
                             </button>
                             <button
                               onClick={handleCellCancel}
-                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                              title="Cancel (Esc)"
                             >
                               ✕
                             </button>
                           </div>
                         ) : (
-                          row.castId
+                          <span className="block w-full h-full">{row.castId}</span>
                         )}
                       </td>
                       <td 
-                        className="px-4 py-3 text-sm text-gray-900 cursor-pointer hover:bg-blue-50"
+                        className="px-4 py-3 text-sm text-gray-900 cursor-pointer hover:bg-blue-50 focus:bg-blue-100 focus:outline-none"
                         onDoubleClick={() => handleCellDoubleClick(row.id, 'castIda', row.castIda)}
+                        tabIndex={0}
                       >
                         {editingCell?.rowId === row.id && editingCell?.field === 'castIda' ? (
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-1">
                             <input
                               type="text"
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
                               onKeyDown={handleKeyDown}
                               onBlur={handleCellSave}
-                              className="flex-1 px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="flex-1 px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
                               autoFocus
                             />
                             <button
                               onClick={handleCellSave}
-                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                              title="Save (Enter)"
                             >
                               ✓
                             </button>
                             <button
                               onClick={handleCellCancel}
-                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                              title="Cancel (Esc)"
                             >
                               ✕
                             </button>
                           </div>
                         ) : (
-                          row.castIda
+                          <span className="block w-full h-full">{row.castIda}</span>
                         )}
                       </td>
                     </tr>

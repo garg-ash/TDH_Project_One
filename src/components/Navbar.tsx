@@ -14,6 +14,18 @@ export default function Navbar() {
     router.push('/modules');
   };
 
+  const handleFilterClick = () => {
+    // Navigate directly to the main page.tsx file under app directory
+    console.log('Filter button clicked - navigating to main page');
+    router.push('/');
+    // Fallback to ensure navigation works
+    setTimeout(() => {
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      }
+    }, 100);
+  };
+
   const handleDataProcessClick = () => {
     setDataProcessDropdown(!dataProcessDropdown);
   };
@@ -27,13 +39,8 @@ export default function Navbar() {
       case 'By Surname':
         router.push('/surname');
         break;
-      case 'By Cast':
-        // router.push('/cast');
-        console.log('By Cast - navigation to be implemented');
-        break;
-      case 'By Area':
-        // router.push('/area');
-        console.log('By Area - navigation to be implemented');
+      case 'Data Alteration':
+        router.push('/data-alteration');
         break;
       default:
         break;
@@ -76,7 +83,10 @@ export default function Navbar() {
             <button className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer">
               Dashboard
             </button>
-            <button className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer">
+            <button 
+              onClick={handleFilterClick}
+              className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer"
+            >
               Filter
             </button>
             <div className="relative" data-dropdown="data-process">
@@ -97,16 +107,10 @@ export default function Navbar() {
                     By Surname
                   </button>
                   <button
-                    onClick={() => handleSubMenuClick('By Cast')}
+                    onClick={() => handleSubMenuClick('Data Alteration')}
                     className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 transition-colors duration-200 text-sm"
                   >
-                    By Cast
-                  </button>
-                  <button
-                    onClick={() => handleSubMenuClick('By Area')}
-                    className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 transition-colors duration-200 text-sm"
-                  >
-                    By Area
+                    Data Alteration
                   </button>
                 </div>
               )}
@@ -158,7 +162,10 @@ export default function Navbar() {
             <button className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-sm text-left cursor-pointer">
               Dashboard
             </button>
-            <button className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-sm text-left cursor-pointer">
+            <button 
+              onClick={handleFilterClick}
+              className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-sm text-left cursor-pointer"
+            >
               Filter
             </button>
             <div className="relative" data-dropdown="data-process">
@@ -179,16 +186,10 @@ export default function Navbar() {
                     By Surname
                   </button>
                   <button
-                    onClick={() => handleSubMenuClick('By Cast')}
+                    onClick={() => handleSubMenuClick('Data Alteration')}
                     className="w-full px-3 py-2 text-left text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors duration-200 text-sm"
                   >
-                    By Cast
-                  </button>
-                  <button
-                    onClick={() => handleSubMenuClick('By Area')}
-                    className="w-full px-3 py-2 text-left text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors duration-200 text-sm"
-                  >
-                    By Area
+                    Data Alteration
                   </button>
                 </div>
               )}

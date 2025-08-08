@@ -9,8 +9,6 @@ interface MasterFilterProps {
     parliament: string;
     assembly: string;
     district: string;
-    block: string;
-    tehsil: string;
     pincode: string;
   }) => void;
 }
@@ -153,8 +151,6 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
   const [parliament, setParliament] = useState('');
   const [assembly, setAssembly] = useState('');
   const [district, setDistrict] = useState('');
-  const [block, setBlock] = useState('');
-  const [tehsil, setTehsil] = useState('');
   const [pincode, setPincode] = useState('');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
@@ -162,8 +158,6 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
   const [parliamentOptions, setParliamentOptions] = useState<string[]>([]);
   const [assemblyOptions, setAssemblyOptions] = useState<string[]>([]);
   const [districtOptions, setDistrictOptions] = useState<string[]>([]);
-  const [blockOptions, setBlockOptions] = useState<string[]>([]);
-  const [tehsilOptions, setTehsilOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch master filter options from backend
@@ -175,8 +169,6 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
         setParliamentOptions(options.parliamentOptions);
         setAssemblyOptions(options.assemblyOptions);
         setDistrictOptions(options.districtOptions);
-        setBlockOptions(options.blockOptions);
-        setTehsilOptions(options.tehsilOptions);
       } catch (error) {
         console.error('Error fetching master filter options:', error);
       } finally {
@@ -205,8 +197,6 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
       parliament,
       assembly,
       district,
-      block,
-      tehsil,
       pincode,
     });
   };
@@ -216,29 +206,22 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
     setParliament('');
     setAssembly('');
     setDistrict('');
-    setBlock('');
-    setTehsil('');
     setPincode('');
     // Apply empty filters
     onMasterFilterChange({
       parliament: '',
       assembly: '',
       district: '',
-      block: '',
-      tehsil: '',
       pincode: '',
     });
   };
 
   // Check if any filters are active
-  const hasActiveFilters = parliament || assembly || district || block || tehsil || pincode;
+  const hasActiveFilters = parliament || assembly || district || pincode;
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div className="animate-pulse bg-gray-200 h-10 rounded-lg"></div>
-        <div className="animate-pulse bg-gray-200 h-10 rounded-lg"></div>
-        <div className="animate-pulse bg-gray-200 h-10 rounded-lg"></div>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
         <div className="animate-pulse bg-gray-200 h-10 rounded-lg"></div>
         <div className="animate-pulse bg-gray-200 h-10 rounded-lg"></div>
         <div className="animate-pulse bg-gray-200 h-10 rounded-lg"></div>
@@ -247,9 +230,10 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start space-x-4">
-        <div className="flex-1 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div className="w-full space-y-4">
+      <div className="flex items-start justify-between">
+        {/* Filter Fields Grid */}
+        <div className="flex-1 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 pr-4">
           <SearchableSelect
             id="parliament"
             value={parliament}
@@ -285,38 +269,61 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
             activeDropdown={activeDropdown}
             onDropdownToggle={setActiveDropdown}
           />
+        </div>
 
-          <SearchableSelect
-            id="block"
-            value={block}
-            onChange={setBlock}
-            options={blockOptions}
-            placeholder="Block / खंड"
-            label=""
-            disabled={loading}
-            activeDropdown={activeDropdown}
-            onDropdownToggle={setActiveDropdown}
-          />
+        {/* Action Buttons - Positioned at the absolute right edge */}
+        <div className="flex items-center space-x-3 flex-shrink-0">
+          {/* Go Button */}
+          <button
+            onClick={handleApplyFilters}
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm cursor-pointer"
+          >
+            <Play size={16} />
+            <span>Go</span>
+          </button>
 
-          {/* Dynamic Go Button - Always on the right */}
-          <div className="flex flex-col space-y-2">
+          {/* Save Button */}
+          <button
+            onClick={() => console.log('Save clicked')}
+            className="px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+            </svg>
+            <span>Save</span>
+          </button>
+          
+          {/* Export Button */}
+          <button
+            onClick={() => console.log('Export clicked')}
+            className="px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span>Export</span>
+          </button>
+          
+          {/* Lock Button */}
+          <button
+            onClick={() => console.log('Lock clicked')}
+            className="px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <span>Lock</span>
+          </button>
+
+          {/* Clear All Button */}
+          {hasActiveFilters && (
             <button
-              onClick={handleApplyFilters}
-              className="flex items-center justify-center space-x-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm cursor-pointer h-full"
+              onClick={clearAllFilters}
+              className="px-4 py-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors duration-200 font-medium text-sm border border-gray-300"
             >
-              <Play size={16} />
-              <span>Go</span>
+              Clear All
             </button>
-            
-            {hasActiveFilters && (
-              <button
-                onClick={clearAllFilters}
-                className="px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors duration-200 font-medium text-sm"
-              >
-                Clear All
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
@@ -325,7 +332,7 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
         <div className="pt-2 border-t border-gray-200">
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-600">
-              Filters ready to apply: {[parliament, assembly, district, block, tehsil, pincode].filter(Boolean).length} selected
+              Filters ready to apply: {[parliament, assembly, district, pincode].filter(Boolean).length} selected
             </div>
             <div className="text-xs text-gray-500">
               Click "Go" to apply filters
@@ -336,4 +343,3 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
     </div>
   );
 }
-
