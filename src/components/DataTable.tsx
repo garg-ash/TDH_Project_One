@@ -71,18 +71,26 @@ const ExcelCell = memo(function ExcelCell({
         onUpdateAndNavigate(rowIndex, columnId, editValue, 'ArrowDown');
         onStopEditing();
         e.preventDefault();
+        e.stopPropagation();
       } else if (e.key === 'Escape') {
         console.log(`ExcelCell: Canceling edit on Escape`);
         onStopEditing();
         e.preventDefault();
+        e.stopPropagation();
       } else if (e.key === 'Tab') {
         console.log(`ExcelCell: Saving on Tab and navigating right - rowIndex: ${rowIndex}, columnId: ${columnId}, editValue: "${editValue}"`);
         onUpdateAndNavigate(rowIndex, columnId, editValue, e.shiftKey ? 'ArrowLeft' : 'ArrowRight');
         onStopEditing();
         e.preventDefault();
+        e.stopPropagation();
       }
     } else {
-      onCellKeyDown(e, rowIndex, columnId);
+      // Only handle navigation keys in non-editing mode, let the parent handle others
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'F2', 'Delete', 'Backspace'].includes(e.key)) {
+        onCellKeyDown(e, rowIndex, columnId);
+        e.preventDefault();
+        e.stopPropagation();
+      }
     }
   };
 
@@ -273,11 +281,15 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
   const tableRef = useRef<HTMLDivElement>(null);
   const previousMasterFiltersRef = useRef<typeof masterFilters | undefined>(undefined);
 
-  const columnIds = useMemo(() => columns.map(col => {
-    if (col.id) return col.id;
-    if ('accessorKey' in col) return col.accessorKey as string;
-    return 'unknown';
-  }), []);
+  const columnIds = useMemo(() => {
+    const ids = columns.map(col => {
+      if (col.id) return col.id;
+      if ('accessorKey' in col) return col.accessorKey as string;
+      return 'unknown';
+    });
+    console.log(`📋 Generated column IDs:`, ids);
+    return ids;
+  }, []);
 
   // Effect to refetch data when master filters change
   useEffect(() => {
@@ -336,12 +348,23 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     return { maxRows, maxCols };
   }, [pagination?.itemsPerPage, data?.length, columnIds.length]);
 
+  // Consolidated navigation function to prevent conflicts
+  const navigateToCell = useCallback((fromRow: number, fromColumnId: string, toRow: number, toColumnId: string) => {
+    console.log(`🎯 Navigation: [${fromRow}, ${fromColumnId}] → [${toRow}, ${toColumnId}]`);
+    console.log(`📍 Column IDs:`, columnIds);
+    console.log(`📍 From index:`, columnIds.indexOf(fromColumnId), `To index:`, columnIds.indexOf(toColumnId));
+    
+    // Immediate state updates for instant response
+    setSelectedCell({ row: toRow, column: toColumnId });
+    setFocusedCell({ row: toRow, column: toColumnId });
+  }, [columnIds]);
+
   const handleUpdateAndNavigate = useCallback((rowIndex: number, columnId: string, value: any, navigationKey: string) => {
     try {
       // First save the data (non-blocking)
       handleUpdateData(rowIndex, columnId, value);
       
-      // Immediately navigate based on the key for instant response
+      // Use the consolidated navigation function
       const currentColumnIndex = columnIds.indexOf(columnId);
       const { maxRows, maxCols } = gridDimensions;
       
@@ -375,16 +398,19 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
       
       if (newRow !== rowIndex || newCol !== currentColumnIndex) {
         const newColumnId = columnIds[newCol];
-        console.log(`Navigating from [${rowIndex}, ${columnId}] to [${newRow}, ${newColumnId}]`);
+        console.log(`🔄 UpdateAndNavigate: ${columnId}[${currentColumnIndex}] → ${newColumnId}[${newCol}] | Row: ${rowIndex} → ${newRow}`);
         
-        // Immediate state updates for instant response
-        setSelectedCell({ row: newRow, column: newColumnId });
-        setFocusedCell({ row: newRow, column: newColumnId });
+        // Validate that the target cell exists
+        if (newColumnId && newRow >= 0 && newRow < maxRows && newCol >= 0 && newCol < maxCols) {
+          navigateToCell(rowIndex, columnId, newRow, newColumnId);
+        } else {
+          console.error(`❌ Invalid navigation target in UpdateAndNavigate: [${newRow}, ${newCol}] - maxRows: ${maxRows}, maxCols: ${maxCols}`);
+        }
       }
     } catch (error) {
       console.error('Error in updateAndNavigate:', error);
     }
-  }, [handleUpdateData, columnIds, gridDimensions]);
+  }, [handleUpdateData, columnIds, gridDimensions, navigateToCell]);
 
   // Throttle cell selection updates
   const throttleTimeoutRef = useRef<number | null>(null);
@@ -437,18 +463,22 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     switch (e.key) {
       case 'ArrowUp':
         newRow = Math.max(0, rowIndex - 1);
+        console.log(`🔄 ArrowUp: Moving up from row ${rowIndex} to ${newRow}`);
         e.preventDefault();
         break;
       case 'ArrowDown':
         newRow = Math.min(maxRows - 1, rowIndex + 1);
+        console.log(`🔄 ArrowDown: Moving down from row ${rowIndex} to ${newRow}`);
         e.preventDefault();
         break;
       case 'ArrowLeft':
         newCol = Math.max(0, currentColumnIndex - 1);
+        console.log(`🔄 ArrowLeft: Moving left from column ${currentColumnIndex} to ${newCol}`);
         e.preventDefault();
         break;
       case 'ArrowRight':
         newCol = Math.min(maxCols - 1, currentColumnIndex + 1);
+        console.log(`🔄 ArrowRight: Moving right from column ${currentColumnIndex} to ${newCol}`);
         e.preventDefault();
         break;
       case 'Tab':
@@ -456,20 +486,25 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
           // Shift+Tab: Move to previous cell
           if (currentColumnIndex > 0) {
             newCol = currentColumnIndex - 1;
+            console.log(`🔄 Shift+Tab: Moving left from column ${currentColumnIndex} to ${newCol}`);
           } else if (rowIndex > 0) {
             newCol = maxCols - 1;
             newRow = rowIndex - 1;
+            console.log(`🔄 Shift+Tab: Moving up-left from [${rowIndex}, ${currentColumnIndex}] to [${newRow}, ${newCol}]`);
           }
         } else {
           // Tab: Move to next cell
           if (currentColumnIndex < maxCols - 1) {
             newCol = currentColumnIndex + 1;
+            console.log(`🔄 Tab: Moving right from column ${currentColumnIndex} to ${newCol}`);
           } else if (rowIndex < maxRows - 1) {
             newCol = 0;
             newRow = rowIndex + 1;
+            console.log(`🔄 Tab: Moving down-right from [${rowIndex}, ${currentColumnIndex}] to [${newRow}, ${newCol}]`);
           }
         }
         e.preventDefault();
+        e.stopPropagation();
         break;
       case 'Enter':
         // SIMPLE: Enter key ONLY moves down, never edits
@@ -506,13 +541,17 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
       const newColumnId = columnIds[newCol];
       console.log(`🎯 Navigation Result: ${columnId}[${currentColumnIndex}] → ${newColumnId}[${newCol}] | Row: ${rowIndex} → ${newRow}`);
       
-      // Immediate state updates for instant response
-      setSelectedCell({ row: newRow, column: newColumnId });
-      setFocusedCell({ row: newRow, column: newColumnId });
+      // Validate that the target cell exists
+      if (newColumnId && newRow >= 0 && newRow < maxRows && newCol >= 0 && newCol < maxCols) {
+        // Use the consolidated navigation function
+        navigateToCell(rowIndex, columnId, newRow, newColumnId);
+      } else {
+        console.error(`❌ Invalid navigation target: [${newRow}, ${newCol}] - maxRows: ${maxRows}, maxCols: ${maxCols}`);
+      }
     } else {
       console.log(`❌ No navigation occurred - staying at ${columnId}[${currentColumnIndex}]`);
     }
-  }, [data, columnIds, editingCell, handleUpdateData, gridDimensions]);
+  }, [data, columnIds, editingCell, handleUpdateData, gridDimensions, navigateToCell]);
 
   const handleStopEditing = useCallback(() => {
     setEditingCell(null);
@@ -526,8 +565,11 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
       const cellElement = document.querySelector(cellSelector) as HTMLElement;
       console.log(`🔍 Focus Update: Looking for cell ${cellSelector}, found:`, cellElement);
       if (cellElement && cellElement !== document.activeElement) {
-        cellElement.focus();
-        console.log(`✅ Focused cell: ${selectedCell.row}-${selectedCell.column}`);
+        // Add a small delay to ensure DOM is ready
+        setTimeout(() => {
+          cellElement.focus();
+          console.log(`✅ Focused cell: ${selectedCell.row}-${selectedCell.column}`);
+        }, 0);
       } else if (!cellElement) {
         console.log(`❌ Cell not found: ${cellSelector}`);
       }
@@ -558,9 +600,11 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
       const activeElement = document.activeElement;
       if (!activeElement || !activeElement.hasAttribute('data-cell')) return;
       
-      // Prevent default for navigation keys immediately
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'F2'].includes(e.key)) {
+      // Only handle keys that aren't already handled by the cell
+      // This prevents double handling and cell skipping
+      if (['Tab'].includes(e.key)) {
         e.preventDefault();
+        e.stopPropagation();
         
         const syntheticEvent = {
           key: e.key,

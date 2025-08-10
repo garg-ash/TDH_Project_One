@@ -74,16 +74,24 @@ const SurnameExcelCell = memo(function SurnameExcelCell({
         onUpdateAndNavigate(rowIndex, columnId, editValue, 'ArrowDown');
         onStopEditing();
         e.preventDefault();
+        e.stopPropagation();
       } else if (e.key === 'Escape') {
         onStopEditing();
         e.preventDefault();
+        e.stopPropagation();
       } else if (e.key === 'Tab') {
         onUpdateAndNavigate(rowIndex, columnId, editValue, e.shiftKey ? 'ArrowLeft' : 'ArrowRight');
         onStopEditing();
         e.preventDefault();
+        e.stopPropagation();
       }
     } else {
-      onCellKeyDown(e, rowIndex, columnId);
+      // Only handle navigation keys in non-editing mode, let the parent handle others
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'F2', 'Delete', 'Backspace'].includes(e.key)) {
+        onCellKeyDown(e, rowIndex, columnId);
+        e.preventDefault();
+        e.stopPropagation();
+      }
     }
   };
 
@@ -222,11 +230,26 @@ export default function SurnameDataTable({ data, loading, onUpdateSurname }: Sur
   const [focusedCell, setFocusedCell] = useState<{row: number, column: string} | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
-  const columnIds = useMemo(() => columns.map(col => {
-    if (col.id) return col.id;
-    if ('accessorKey' in col) return col.accessorKey as string;
-    return 'unknown';
-  }), []);
+  const columnIds = useMemo(() => {
+    const ids = columns.map(col => {
+      if (col.id) return col.id;
+      if ('accessorKey' in col) return col.accessorKey as string;
+      return 'unknown';
+    });
+    console.log(`📋 Surname Generated column IDs:`, ids);
+    return ids;
+  }, []);
+
+  // Consolidated navigation function to prevent conflicts
+  const navigateToCell = useCallback((fromRow: number, fromColumnId: string, toRow: number, toColumnId: string) => {
+    console.log(`🎯 Surname Navigation: [${fromRow}, ${fromColumnId}] → [${toRow}, ${toColumnId}]`);
+    console.log(`📍 Surname Column IDs:`, columnIds);
+    console.log(`📍 Surname From index:`, columnIds.indexOf(fromColumnId), `To index:`, columnIds.indexOf(toColumnId));
+    
+    // Immediate state updates for instant response
+    setSelectedCell({ row: toRow, column: toColumnId });
+    setFocusedCell({ row: toRow, column: toColumnId });
+  }, [columnIds]);
 
   const handleUpdateData = useCallback((rowIndex: number, columnId: string, value: any) => {
     try {
@@ -297,13 +320,19 @@ export default function SurnameDataTable({ data, loading, onUpdateSurname }: Sur
       
       if (newRow !== rowIndex || newCol !== currentColumnIndex) {
         const newColumnId = columnIds[newCol];
-        setSelectedCell({ row: newRow, column: newColumnId });
-        setFocusedCell({ row: newRow, column: newColumnId });
+        console.log(`🔄 Surname UpdateAndNavigate: ${columnId}[${currentColumnIndex}] → ${newColumnId}[${newCol}] | Row: ${rowIndex} → ${newRow}`);
+        
+        // Validate that the target cell exists
+        if (newColumnId && newRow >= 0 && newRow < maxRows && newCol >= 0 && newCol < maxCols) {
+          navigateToCell(rowIndex, columnId, newRow, newColumnId);
+        } else {
+          console.error(`❌ Invalid navigation target in Surname UpdateAndNavigate: [${newRow}, ${newCol}] - maxRows: ${maxRows}, maxCols: ${maxCols}`);
+        }
       }
     } catch (error) {
       console.error('Error in updateAndNavigate:', error);
     }
-  }, [handleUpdateData, columnIds, gridDimensions]);
+  }, [handleUpdateData, columnIds, gridDimensions, navigateToCell]);
 
   const handleCellClick = useCallback((rowIndex: number, columnId: string) => {
     setSelectedCell({ row: rowIndex, column: columnId });
@@ -347,40 +376,50 @@ export default function SurnameDataTable({ data, loading, onUpdateSurname }: Sur
     switch (e.key) {
       case 'ArrowUp':
         newRow = Math.max(0, rowIndex - 1);
+        console.log(`🔄 Surname ArrowUp: Moving up from row ${rowIndex} to ${newRow}`);
         e.preventDefault();
         break;
       case 'ArrowDown':
         newRow = Math.min(maxRows - 1, rowIndex + 1);
+        console.log(`🔄 Surname ArrowDown: Moving down from row ${rowIndex} to ${newRow}`);
         e.preventDefault();
         break;
       case 'ArrowLeft':
         newCol = Math.max(0, currentColumnIndex - 1);
+        console.log(`🔄 Surname ArrowLeft: Moving left from column ${currentColumnIndex} to ${newCol}`);
         e.preventDefault();
         break;
       case 'ArrowRight':
         newCol = Math.min(maxCols - 1, currentColumnIndex + 1);
+        console.log(`🔄 Surname ArrowRight: Moving right from column ${currentColumnIndex} to ${newCol}`);
         e.preventDefault();
         break;
       case 'Tab':
         if (e.shiftKey) {
           if (currentColumnIndex > 0) {
             newCol = currentColumnIndex - 1;
+            console.log(`🔄 Surname Shift+Tab: Moving left from column ${currentColumnIndex} to ${newCol}`);
           } else if (rowIndex > 0) {
             newCol = maxCols - 1;
             newRow = rowIndex - 1;
+            console.log(`🔄 Surname Shift+Tab: Moving up-left from [${rowIndex}, ${currentColumnIndex}] to [${newRow}, ${newCol}]`);
           }
         } else {
           if (currentColumnIndex < maxCols - 1) {
             newCol = currentColumnIndex + 1;
+            console.log(`🔄 Surname Tab: Moving right from column ${currentColumnIndex} to ${newCol}`);
           } else if (rowIndex < maxRows - 1) {
             newCol = 0;
             newRow = rowIndex + 1;
+            console.log(`🔄 Surname Tab: Moving down-right from [${rowIndex}, ${currentColumnIndex}] to [${newRow}, ${newCol}]`);
           }
         }
         e.preventDefault();
+        e.stopPropagation();
         break;
       case 'Enter':
         newRow = Math.min(maxRows - 1, rowIndex + 1);
+        console.log(`🔄 Surname Enter: Moving down from row ${rowIndex} to ${newRow}`);
         e.preventDefault();
         break;
       case 'F2':
@@ -407,12 +446,17 @@ export default function SurnameDataTable({ data, loading, onUpdateSurname }: Sur
       const newColumnId = columnIds[newCol];
       console.log(`🎯 Surname Navigation Result: ${columnId}[${currentColumnIndex}] → ${newColumnId}[${newCol}] | Row: ${rowIndex} → ${newRow}`);
       
-      setSelectedCell({ row: newRow, column: newColumnId });
-      setFocusedCell({ row: newRow, column: newColumnId });
+      // Validate that the target cell exists
+      if (newColumnId && newRow >= 0 && newRow < maxRows && newCol >= 0 && newCol < maxCols) {
+        // Use the consolidated navigation function
+        navigateToCell(rowIndex, columnId, newRow, newColumnId);
+      } else {
+        console.error(`❌ Invalid navigation target in Surname handleCellKeyDown: [${newRow}, ${newCol}] - maxRows: ${maxRows}, maxCols: ${maxCols}`);
+      }
     } else {
       console.log(`❌ Surname: No navigation occurred - staying at ${columnId}[${currentColumnIndex}]`);
     }
-  }, [data, columnIds, editingCell, handleUpdateData, gridDimensions]);
+  }, [data, columnIds, editingCell, handleUpdateData, gridDimensions, navigateToCell]);
 
   const handleStopEditing = useCallback(() => {
     setEditingCell(null);
@@ -422,9 +466,17 @@ export default function SurnameDataTable({ data, loading, onUpdateSurname }: Sur
   // Focus the selected cell
   useEffect(() => {
     if (selectedCell && !editingCell) {
-      const cellElement = document.querySelector(`[data-cell="${selectedCell.row}-${selectedCell.column}"]`) as HTMLElement;
+      const cellSelector = `[data-cell="${selectedCell.row}-${selectedCell.column}"]`;
+      const cellElement = document.querySelector(cellSelector) as HTMLElement;
+      console.log(`🔍 Surname Focus Update: Looking for cell ${cellSelector}, found:`, cellElement);
       if (cellElement && cellElement !== document.activeElement) {
-        cellElement.focus();
+        // Add a small delay to ensure DOM is ready
+        setTimeout(() => {
+          cellElement.focus();
+          console.log(`✅ Surname Focused cell: ${selectedCell.row}-${selectedCell.column}`);
+        }, 0);
+      } else if (!cellElement) {
+        console.log(`❌ Surname Cell not found: ${cellSelector}`);
       }
     }
   }, [selectedCell?.row, selectedCell?.column, editingCell]);
@@ -452,8 +504,11 @@ export default function SurnameDataTable({ data, loading, onUpdateSurname }: Sur
       const activeElement = document.activeElement;
       if (!activeElement || !activeElement.hasAttribute('data-cell')) return;
       
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'F2'].includes(e.key)) {
+      // Only handle keys that aren't already handled by the cell
+      // This prevents double handling and cell skipping
+      if (['Tab'].includes(e.key)) {
         e.preventDefault();
+        e.stopPropagation();
         
         const syntheticEvent = {
           key: e.key,
