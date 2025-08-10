@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
@@ -9,12 +8,18 @@ import {
   flexRender,
   ColumnDef,
 } from '@tanstack/react-table';
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Voter } from '../services/api';
-import { useVoters } from '../hooks/useVoters';
 
-// Excel-like Cell Component
-interface ExcelCellProps {
+// Interface for surname data
+export interface SurnameData {
+  id: number;
+  surname: string;
+  count: number;
+  castId: string;
+  castIda: string;
+}
+
+// Excel-like Cell Component for Surname Table
+interface SurnameExcelCellProps {
   value: any;
   rowIndex: number;
   columnId: string;
@@ -32,7 +37,7 @@ interface ExcelCellProps {
   loading?: boolean;
 }
 
-const ExcelCell = memo(function ExcelCell({ 
+const SurnameExcelCell = memo(function SurnameExcelCell({ 
   value, 
   rowIndex, 
   columnId, 
@@ -48,13 +53,12 @@ const ExcelCell = memo(function ExcelCell({
   setEditValue,
   onStopEditing,
   loading = false 
-}: ExcelCellProps) {
+}: SurnameExcelCellProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
-      // Don't select all text - just position cursor at end for character-by-character editing
       setTimeout(() => {
         if (inputRef.current) {
           const length = inputRef.current.value.length;
@@ -67,16 +71,13 @@ const ExcelCell = memo(function ExcelCell({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (isEditing) {
       if (e.key === 'Enter') {
-        console.log(`ExcelCell: Saving on Enter and navigating down - rowIndex: ${rowIndex}, columnId: ${columnId}, editValue: "${editValue}"`);
         onUpdateAndNavigate(rowIndex, columnId, editValue, 'ArrowDown');
         onStopEditing();
         e.preventDefault();
       } else if (e.key === 'Escape') {
-        console.log(`ExcelCell: Canceling edit on Escape`);
         onStopEditing();
         e.preventDefault();
       } else if (e.key === 'Tab') {
-        console.log(`ExcelCell: Saving on Tab and navigating right - rowIndex: ${rowIndex}, columnId: ${columnId}, editValue: "${editValue}"`);
         onUpdateAndNavigate(rowIndex, columnId, editValue, e.shiftKey ? 'ArrowLeft' : 'ArrowRight');
         onStopEditing();
         e.preventDefault();
@@ -88,7 +89,6 @@ const ExcelCell = memo(function ExcelCell({
 
   const handleBlur = () => {
     if (isEditing) {
-      console.log(`ExcelCell: Saving on Blur - rowIndex: ${rowIndex}, columnId: ${columnId}, editValue: "${editValue}"`);
       onUpdate(rowIndex, columnId, editValue);
       onStopEditing();
     }
@@ -175,7 +175,7 @@ const ExcelCell = memo(function ExcelCell({
   );
 });
 
-const columns: ColumnDef<Voter>[] = [
+const columns: ColumnDef<SurnameData>[] = [
   {
     id: 'select',
     header: 'Sr. No.',
@@ -187,91 +187,40 @@ const columns: ColumnDef<Voter>[] = [
     size: 80,
   },
   {
-    accessorKey: 'familyId',
-    header: 'Family Id',
+    accessorKey: 'surname',
+    header: 'Surname',
+    size: 200,
+  },
+  {
+    accessorKey: 'count',
+    header: 'Count',
+    size: 120,
+  },
+  {
+    accessorKey: 'castId',
+    header: 'Cast ID',
     size: 150,
-  },
-  {
-    accessorKey: 'name',
-    header: 'Name',
-    size: 180,
-  },
-  {
-    accessorKey: 'mobile1',
-    header: 'Mobile 1',
-    size: 120,
-  },
-  {
-    accessorKey: 'mobile2',
-    header: 'Mobile 2',
-    size: 120,
-  },
-  {
-    accessorKey: 'dob',
-    header: 'DOB',
-    size: 120,
-  },
-  {
-    accessorKey: 'ps',
-    header: 'PS',
-    size: 100,
-  },
-  {
-    accessorKey: 'gp',
-    header: 'GP',
-    size: 140,
-  },
-  {
-    accessorKey: 'gram',
-    header: 'Gram',
-    size: 140,
   },
   {
     accessorKey: 'castIda',
     header: 'Cast IDA',
-    size: 140,
-  },
-  {
-    accessorKey: 'cast',
-    header: 'Cast',
-    size: 120,
-  },
-  {
-    accessorKey: 'pc',
-    header: 'PC',
-    size: 120,
-  },
-  {
-    accessorKey: 'ac',
-    header: 'AC',
-    size: 100,
-  },
-  {
-    accessorKey: 'district',
-    header: 'District',
-    size: 120,
+    size: 150,
   },
 ];
 
-export default function DataTable({ masterFilters }: { masterFilters?: { parliament?: string; assembly?: string; district?: string } }) {
-  const {
-    data,
-    pagination,
-    loading,
-    error,
-    handlePageChange,
-    handleItemsPerPageChange,
-    updateVoter,
-    fetchVoters
-  } = useVoters();
+interface SurnameDataTableProps {
+  data: SurnameData[];
+  loading: boolean;
+  onUpdateSurname: (id: number, surnameData: Partial<SurnameData>) => Promise<void>;
+}
 
+export default function SurnameDataTable({ data, loading, onUpdateSurname }: SurnameDataTableProps) {
   // Excel-like state management
   const [selectedCell, setSelectedCell] = useState<{row: number, column: string} | null>(null);
   const [editingCell, setEditingCell] = useState<{row: number, column: string} | null>(null);
   const [editValue, setEditValue] = useState('');
   const [focusedCell, setFocusedCell] = useState<{row: number, column: string} | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
-  const previousMasterFiltersRef = useRef<typeof masterFilters | undefined>(undefined);
 
   const columnIds = useMemo(() => columns.map(col => {
     if (col.id) return col.id;
@@ -279,69 +228,42 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     return 'unknown';
   }), []);
 
-  // Effect to refetch data when master filters change
-  useEffect(() => {
-    // Only refetch if masterFilters actually changed
-    const currentFilters = JSON.stringify(masterFilters);
-    const previousFilters = JSON.stringify(previousMasterFiltersRef.current);
-    
-    if (currentFilters !== previousFilters) {
-      previousMasterFiltersRef.current = masterFilters;
-      
-      // Add a small delay to prevent rapid successive API calls
-      const timeoutId = setTimeout(() => {
-        if (masterFilters && (masterFilters.parliament || masterFilters.assembly || masterFilters.district)) {
-          console.log('Master filters changed, refetching data with filters:', masterFilters);
-          fetchVoters(1, pagination?.itemsPerPage || 500, masterFilters);
-        } else if (masterFilters && !masterFilters.parliament && !masterFilters.assembly && !masterFilters.district) {
-          // If all master filters are cleared, fetch all data
-          console.log('All master filters cleared, fetching all data');
-          fetchVoters(1, pagination?.itemsPerPage || 500, {});
-        }
-      }, 300); // 300ms delay
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [masterFilters, fetchVoters, pagination?.itemsPerPage]);
-
   const handleUpdateData = useCallback((rowIndex: number, columnId: string, value: any) => {
     try {
-      // Only update if we have actual data for this row
-      const voter = data && data[rowIndex];
-      if (!voter) {
+      const surnameItem = data && data[rowIndex];
+      if (!surnameItem) {
         console.log(`Cannot update row ${rowIndex} - no data available`);
         return;
       }
 
-      console.log(`Saving ${columnId} = "${value}" for voter ${voter.id} at row ${rowIndex}`);
+      console.log(`Saving ${columnId} = "${value}" for surname ${surnameItem.id} at row ${rowIndex}`);
       
-      // Call the updateVoter function asynchronously (non-blocking)
-      updateVoter(voter.id, { [columnId]: value }).then(() => {
-        console.log(`Successfully updated ${columnId} for voter ${voter.id}`);
+      // Call the update function asynchronously
+      onUpdateSurname(surnameItem.id, { [columnId]: value }).then(() => {
+        console.log(`Successfully updated ${columnId} for surname ${surnameItem.id}`);
       }).catch((error) => {
-        console.error('Error updating voter:', error);
+        console.error('Error updating surname:', error);
       });
       
     } catch (error) {
-      console.error('Error updating voter:', error);
+      console.error('Error updating surname:', error);
     }
-  }, [data, updateVoter]);
+  }, [data, onUpdateSurname]);
 
-  // Memoize grid dimensions to avoid recalculation
+  // Memoize grid dimensions
   const gridDimensions = useMemo(() => {
-    // Significantly reduce rows for much better performance
-    const maxVisibleRows = Math.max(15, pagination?.itemsPerPage || 15);
+    const maxVisibleRows = Math.max(15, data?.length || 15);
     const maxRows = Math.max(maxVisibleRows, data?.length || 0);
     const maxCols = columnIds.length;
     return { maxRows, maxCols };
-  }, [pagination?.itemsPerPage, data?.length, columnIds.length]);
+  }, [data?.length, columnIds.length]);
 
   const handleUpdateAndNavigate = useCallback((rowIndex: number, columnId: string, value: any, navigationKey: string) => {
     try {
-      // First save the data (non-blocking)
+      // First save the data
       handleUpdateData(rowIndex, columnId, value);
       
-      // Immediately navigate based on the key for instant response
+      // Navigate based on the key
       const currentColumnIndex = columnIds.indexOf(columnId);
       const { maxRows, maxCols } = gridDimensions;
       
@@ -375,9 +297,6 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
       
       if (newRow !== rowIndex || newCol !== currentColumnIndex) {
         const newColumnId = columnIds[newCol];
-        console.log(`Navigating from [${rowIndex}, ${columnId}] to [${newRow}, ${newColumnId}]`);
-        
-        // Immediate state updates for instant response
         setSelectedCell({ row: newRow, column: newColumnId });
         setFocusedCell({ row: newRow, column: newColumnId });
       }
@@ -386,15 +305,7 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     }
   }, [handleUpdateData, columnIds, gridDimensions]);
 
-  // Throttle cell selection updates
-  const throttleTimeoutRef = useRef<number | null>(null);
-  
   const handleCellClick = useCallback((rowIndex: number, columnId: string) => {
-    // Clear any pending throttled update
-    if (throttleTimeoutRef.current) {
-      clearTimeout(throttleTimeoutRef.current);
-    }
-    
     setSelectedCell({ row: rowIndex, column: columnId });
     setFocusedCell({ row: rowIndex, column: columnId });
     if (editingCell) {
@@ -407,8 +318,7 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     if (columnId === 'select') return; // Don't edit row numbers
     
     // Allow editing even for empty cells - get current value or empty string
-    const currentValue = (data && data[rowIndex]) ? (data[rowIndex]?.[columnId as keyof Voter] || '') : '';
-    console.log(`Starting edit via double-click - rowIndex: ${rowIndex}, columnId: ${columnId}, currentValue: "${currentValue}"`);
+    const currentValue = (data && data[rowIndex]) ? (data[rowIndex]?.[columnId as keyof SurnameData] || '') : '';
     setEditValue(String(currentValue));
     setEditingCell({ row: rowIndex, column: columnId });
     setSelectedCell({ row: rowIndex, column: columnId });
@@ -416,13 +326,13 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
   }, [data]);
 
   const handleCellKeyDown = useCallback((e: React.KeyboardEvent, rowIndex: number, columnId: string) => {
-    if (editingCell) return; // Don't handle navigation while editing
+    if (editingCell) return;
 
     const currentColumnIndex = columnIds.indexOf(columnId);
     const { maxRows, maxCols } = gridDimensions;
     
     // Debug logging to identify the issue
-    console.log(`🔍 Navigation Debug:`, {
+    console.log(`🔍 Surname Navigation Debug:`, {
       key: e.key,
       columnId,
       currentColumnIndex,
@@ -453,7 +363,6 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
         break;
       case 'Tab':
         if (e.shiftKey) {
-          // Shift+Tab: Move to previous cell
           if (currentColumnIndex > 0) {
             newCol = currentColumnIndex - 1;
           } else if (rowIndex > 0) {
@@ -461,7 +370,6 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
             newRow = rowIndex - 1;
           }
         } else {
-          // Tab: Move to next cell
           if (currentColumnIndex < maxCols - 1) {
             newCol = currentColumnIndex + 1;
           } else if (rowIndex < maxRows - 1) {
@@ -472,17 +380,13 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
         e.preventDefault();
         break;
       case 'Enter':
-        // SIMPLE: Enter key ONLY moves down, never edits
-        console.log(`✅ ENTER KEY: Moving down from row ${rowIndex} to row ${Math.min(maxRows - 1, rowIndex + 1)}`);
         newRow = Math.min(maxRows - 1, rowIndex + 1);
         e.preventDefault();
-        e.stopPropagation();
         break;
       case 'F2':
         if (columnId !== 'select') {
           // Allow editing even for empty cells - get current value or empty string
-          const currentValue = (data && data[rowIndex]) ? (data[rowIndex]?.[columnId as keyof Voter] || '') : '';
-          console.log(`Starting edit via F2 key - rowIndex: ${rowIndex}, columnId: ${columnId}, currentValue: "${currentValue}"`);
+          const currentValue = (data && data[rowIndex]) ? (data[rowIndex]?.[columnId as keyof SurnameData] || '') : '';
           setEditValue(String(currentValue));
           setEditingCell({ row: rowIndex, column: columnId });
           setSelectedCell({ row: rowIndex, column: columnId });
@@ -497,20 +401,16 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
         }
         e.preventDefault();
         break;
-      default:
-        // REMOVED: No more "type to edit" - only F2 and double-click should edit
-        break;
     }
 
     if (newRow !== rowIndex || newCol !== currentColumnIndex) {
       const newColumnId = columnIds[newCol];
-      console.log(`🎯 Navigation Result: ${columnId}[${currentColumnIndex}] → ${newColumnId}[${newCol}] | Row: ${rowIndex} → ${newRow}`);
+      console.log(`🎯 Surname Navigation Result: ${columnId}[${currentColumnIndex}] → ${newColumnId}[${newCol}] | Row: ${rowIndex} → ${newRow}`);
       
-      // Immediate state updates for instant response
       setSelectedCell({ row: newRow, column: newColumnId });
       setFocusedCell({ row: newRow, column: newColumnId });
     } else {
-      console.log(`❌ No navigation occurred - staying at ${columnId}[${currentColumnIndex}]`);
+      console.log(`❌ Surname: No navigation occurred - staying at ${columnId}[${currentColumnIndex}]`);
     }
   }, [data, columnIds, editingCell, handleUpdateData, gridDimensions]);
 
@@ -519,22 +419,17 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     setEditValue('');
   }, []);
 
-  // Optimized effect to focus the selected cell (immediate for better responsiveness)
+  // Focus the selected cell
   useEffect(() => {
     if (selectedCell && !editingCell) {
-      const cellSelector = `[data-cell="${selectedCell.row}-${selectedCell.column}"]`;
-      const cellElement = document.querySelector(cellSelector) as HTMLElement;
-      console.log(`🔍 Focus Update: Looking for cell ${cellSelector}, found:`, cellElement);
+      const cellElement = document.querySelector(`[data-cell="${selectedCell.row}-${selectedCell.column}"]`) as HTMLElement;
       if (cellElement && cellElement !== document.activeElement) {
         cellElement.focus();
-        console.log(`✅ Focused cell: ${selectedCell.row}-${selectedCell.column}`);
-      } else if (!cellElement) {
-        console.log(`❌ Cell not found: ${cellSelector}`);
       }
     }
   }, [selectedCell?.row, selectedCell?.column, editingCell]);
 
-  // Effect to initialize first cell selection (only once)
+  // Initialize first cell selection
   useEffect(() => {
     if (data && data.length > 0 && !selectedCell && !loading && columnIds.length > 0) {
       setSelectedCell({ row: 0, column: columnIds[0] });
@@ -542,7 +437,7 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     }
   }, [data?.length, selectedCell, loading, columnIds[0]]);
 
-  // Optimized keyboard handler with direct cell reference
+  // Global keyboard handler
   const currentCellRef = useRef<{row: number, column: string} | null>(null);
   
   useEffect(() => {
@@ -554,11 +449,9 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
       const currentCell = currentCellRef.current;
       if (!currentCell || editingCell || !tableRef.current) return;
       
-      // Quick check if focus is in table without expensive DOM query
       const activeElement = document.activeElement;
       if (!activeElement || !activeElement.hasAttribute('data-cell')) return;
       
-      // Prevent default for navigation keys immediately
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'F2'].includes(e.key)) {
         e.preventDefault();
         
@@ -585,10 +478,9 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     getSortedRowModel: getSortedRowModel(),
   });
 
-  // Pre-compute the table body to ensure all hooks are called consistently
+  // Pre-compute the table body
   const tableBody = useMemo(() => {
-    // Calculate how many rows we need to fill the screen (Excel-like) - reduced for performance
-    const maxVisibleRows = Math.max(15, pagination?.itemsPerPage || 15);
+    const maxVisibleRows = Math.max(15, data?.length || 15);
     const totalRows = loading ? maxVisibleRows : Math.max(maxVisibleRows, data?.length || 0);
     
     return Array.from({ length: totalRows }).map((_, index) => {
@@ -610,12 +502,12 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
               {loading ? (
                 <div className={`h-6 animate-pulse ${cellIndex === 0 ? 'bg-gray-100' : 'bg-gray-50'}`}></div>
               ) : (
-                <ExcelCell
+                <SurnameExcelCell
                   value={
                     columnId === 'select' 
                       ? index + 1 
                       : isDataRow && rowData 
-                        ? (rowData[columnId as keyof Voter] || '') 
+                        ? (rowData[columnId as keyof SurnameData] || '') 
                         : ''
                   }
                   rowIndex={index}
@@ -639,37 +531,18 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
         </tr>
       );
     });
-  }, [data, loading, pagination?.itemsPerPage, selectedCell?.row, selectedCell?.column, focusedCell?.row, focusedCell?.column, editingCell?.row, editingCell?.column, editValue, columnIds, handleCellClick, handleCellDoubleClick, handleCellKeyDown, handleUpdateData, handleUpdateAndNavigate, setEditValue, handleStopEditing]);
+  }, [data, loading, selectedCell?.row, selectedCell?.column, focusedCell?.row, focusedCell?.column, editingCell?.row, editingCell?.column, editValue, columnIds, handleCellClick, handleCellDoubleClick, handleCellKeyDown, handleUpdateData, handleUpdateAndNavigate, setEditValue, handleStopEditing]);
 
-  // Handle error and loading states after all hooks are called
-  if (loading && !data.length) {
+  if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-lg p-8">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <div className="text-gray-600">Loading data...</div>
+          <div className="text-gray-600">Loading surname data...</div>
         </div>
       </div>
     );
   }
-
-  if (error) {
-    return (
-      <div className="bg-white rounded-lg shadow-lg p-8">
-        <div className="text-center">
-          <div className="text-red-600 text-lg font-semibold mb-2">Error Loading Data</div>
-          <div className="text-gray-600 mb-4">{error}</div>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
 
   return (
     <div className="bg-white h-screen w-full overflow-hidden relative" style={{ border: '1px solid #d1d5db' }}>
@@ -711,80 +584,15 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
 
       {/* Grid Footer */}
       <div className="bg-gray-50 px-6 py-3 border-t border-gray-200 absolute bottom-0 left-0 right-0">
-        <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-gray-700 space-y-2 sm:space-y-0">
-          <div className="text-center sm:text-left">
-            Showing {loading || !pagination ? '...' : `${((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to ${Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of ${pagination.totalItems} entries`}
+        <div className="flex justify-between items-center text-sm text-gray-700">
+          <div>
+            Showing {data?.length || 0} surname entries
           </div>
-          
-          {/* Centered Pagination */}
-          <div className="flex items-center justify-center space-x-1">
-            <button 
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700"
-              onClick={() => handlePageChange(pagination.currentPage - 1)}
-              disabled={!pagination || pagination.currentPage <= 1 || loading}
-              title="Previous"
-            >
-              &lt;
-            </button>
-            
-            {/* Page numbers with ellipsis */}
-            {(() => {
-              if (!pagination) return null;
-              const totalPages = pagination.totalPages;
-              const currentPage = pagination.currentPage;
-              const pages = [];
-              
-              if (totalPages <= 5) {
-                // If total pages is 5 or less, show all pages
-                for (let i = 1; i <= totalPages; i++) {
-                  pages.push(i);
-                }
-              } else {
-                // Show first 5 pages
-                for (let i = 1; i <= 5; i++) {
-                  pages.push(i);
-                }
-                
-                // Add ellipsis
-                pages.push('...');
-                
-                // Add total pages
-                pages.push(totalPages);
-              }
-              
-              return pages.map((page, index) => (
-                <div key={index}>
-                  {page === '...' ? (
-                    <span className="px-2 py-1 text-gray-400">......</span>
-                  ) : (
-                    <button
-                      className={`px-3 py-1 rounded transition-colors ${
-                        page === currentPage
-                          ? 'bg-gray-600 text-white'
-                          : 'border border-gray-300 hover:bg-gray-100 text-gray-700'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      onClick={() => handlePageChange(page as number)}
-                      disabled={loading}
-                    >
-                      {page}
-                    </button>
-                  )}
-                </div>
-              ));
-            })()}
-            
-            {/* Items per page button */}
-            <button 
-              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center space-x-1 ml-4"
-              onClick={() => console.log('Items per page clicked')}
-              title="Items per page"
-            >
-              <span>{pagination.itemsPerPage}</span>
-              <span>^</span>
-            </button>
+          <div className="text-gray-500">
+            Total Surnames: {data?.length || 0}
           </div>
         </div>
       </div>
     </div>
   );
-} 
+}

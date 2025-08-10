@@ -20,6 +20,11 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [masterFilters, setMasterFilters] = useState<{
+    parliament?: string;
+    assembly?: string;
+    district?: string;
+  }>({});
 
   useEffect(() => {
     const token = localStorage.getItem('authToken');
@@ -72,6 +77,11 @@ export default function HomePage() {
 
   const handleMasterFilterChange = (filters: any) => {
     console.log('Master filter changed:', filters);
+    setMasterFilters({
+      parliament: filters.parliament,
+      assembly: filters.assembly,
+      district: filters.district
+    });
   };
 
   const handleFilterChange = (filters: any) => {
@@ -181,9 +191,13 @@ export default function HomePage() {
       <Navbar />
       
       {/* Filter and Data Table */}
-      <Filter onFilterChange={handleFilterChange} loading={loading} />
+      <Filter 
+        masterFilters={masterFilters}
+        onFilterChange={handleFilterChange} 
+        loading={loading} 
+      />
       <div className="pt-4 pb-4">
-        <DataTable />
+        <DataTable masterFilters={masterFilters} />
       </div>
     </div>
   );

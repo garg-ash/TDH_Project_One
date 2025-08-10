@@ -9,7 +9,6 @@ interface MasterFilterProps {
     parliament: string;
     assembly: string;
     district: string;
-    pincode: string;
   }) => void;
 }
 
@@ -101,33 +100,32 @@ function SearchableSelect({
           <span className={value ? 'text-gray-900' : 'text-gray-500'}>
             {value || placeholder}
           </span>
-          <ChevronDown size={16} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown 
+            size={16} 
+            className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
+          />
         </button>
 
         {isOpen && (
           <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
-            {/* Search Input */}
             <div className="p-2 border-b border-gray-200">
               <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Search size={16} className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                  className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
                   autoFocus
                 />
               </div>
             </div>
-
-            {/* Options List */}
             <div className="max-h-48 overflow-y-auto">
               {filteredOptions.length > 0 ? (
-                filteredOptions.map((option) => (
+                filteredOptions.map((option, index) => (
                   <button
-                    key={option}
-                    type="button"
+                    key={index}
                     onClick={() => handleSelect(option)}
                     className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
                   >
@@ -135,9 +133,7 @@ function SearchableSelect({
                   </button>
                 ))
               ) : (
-                <div className="px-3 py-2 text-sm text-gray-500">
-                  No options found
-                </div>
+                <div className="px-3 py-2 text-sm text-gray-500">No options found</div>
               )}
             </div>
           </div>
@@ -151,7 +147,6 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
   const [parliament, setParliament] = useState('');
   const [assembly, setAssembly] = useState('');
   const [district, setDistrict] = useState('');
-  const [pincode, setPincode] = useState('');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
   // State for dropdown options
@@ -179,25 +174,12 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
     fetchMasterFilterOptions();
   }, []);
 
-  // Remove the automatic filter application
-  // useEffect(() => {
-  //   onMasterFilterChange({
-  //     parliament,
-  //     assembly,
-  //     district,
-  //     block,
-  //     tehsil,
-  //     pincode,
-  //   });
-  // }, [parliament, assembly, district, block, tehsil, pincode]);
-
-  // Function to apply filters when Go button is clicked
+  // Function to apply filters when Go button is clicked (for immediate feedback)
   const handleApplyFilters = () => {
     onMasterFilterChange({
       parliament,
       assembly,
       district,
-      pincode,
     });
   };
 
@@ -206,18 +188,15 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
     setParliament('');
     setAssembly('');
     setDistrict('');
-    setPincode('');
-    // Apply empty filters
     onMasterFilterChange({
       parliament: '',
       assembly: '',
       district: '',
-      pincode: '',
     });
   };
 
   // Check if any filters are active
-  const hasActiveFilters = parliament || assembly || district || pincode;
+  const hasActiveFilters = parliament || assembly || district;
 
   if (loading) {
     return (
@@ -326,20 +305,6 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
           )}
         </div>
       </div>
-
-      {/* Filter Status */}
-      {hasActiveFilters && (
-        <div className="pt-2 border-t border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              Filters ready to apply: {[parliament, assembly, district, pincode].filter(Boolean).length} selected
-            </div>
-            <div className="text-xs text-gray-500">
-              Click "Go" to apply filters
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

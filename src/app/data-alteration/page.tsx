@@ -1,23 +1,71 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowRight } from 'lucide-react';
-import MasterFilter from '../../components/MasterFilter';
 import Navbar from '../../components/Navbar';
+import MasterFilter from '../../components/MasterFilter';
+import DataTable from '../../components/DataTable';
+import { useVoters } from '../../hooks/useVoters';
 
 export default function DataAlterationPage() {
-  const [loading, setLoading] = useState(false);
-  const [selectedColumnField, setSelectedColumnField] = useState('');
+  const [masterFilters, setMasterFilters] = useState<{
+    parliament?: string;
+    assembly?: string;
+    district?: string;
+  }>({});
+
+  // Use the useVoters hook with master filters
+  const {
+    data: voters,
+    loading,
+    error,
+    pagination,
+    fetchVoters,
+    updateVoter,
+    handlePageChange,
+    handleItemsPerPageChange
+  } = useVoters();
+
+  // Effect to refetch data when master filters change
+  useEffect(() => {
+    if (masterFilters.parliament || masterFilters.assembly || masterFilters.district) {
+      console.log('Master filters changed, refetching voter data:', masterFilters);
+      fetchVoters(1, pagination.limit, masterFilters);
+    } else {
+      // If all master filters are cleared, show all data
+      console.log('All master filters cleared, showing all voter data');
+      fetchVoters(1, pagination.limit);
+    }
+  }, [masterFilters]);
 
   const handleMasterFilterChange = (filters: any) => {
     console.log('Master filter changed:', filters);
-    // Handle master filter changes here
+    setMasterFilters({
+      parliament: filters.parliament,
+      assembly: filters.assembly,
+      district: filters.district
+    });
+    // Note: Don't call fetchVoters here as the useEffect will handle it
+  };
+
+  const handleVoterUpdate = async (id: number, voterData: any) => {
+    try {
+      await updateVoter(id, voterData);
+      console.log('Voter updated successfully:', { id, data: voterData });
+      
+      // Refetch data to show updated information
+      if (masterFilters.parliament || masterFilters.assembly || masterFilters.district) {
+        fetchVoters(pagination.currentPage, pagination.limit, masterFilters);
+      } else {
+        fetchVoters(pagination.currentPage, pagination.limit);
+      }
+    } catch (error) {
+      console.error('Error updating voter:', error);
+    }
   };
 
   return (
     <div>
-      
-      
       {/* Back to Modules Button and Master Filter */}
       <div className="bg-gray-100 border-b border-gray-200 px-6 py-4">
         <div className="max-w-7xl flex items-center space-x-6">
@@ -33,29 +81,46 @@ export default function DataAlterationPage() {
           </div>
         </div>
       </div>
-
-            {/* Navbar */}
-            <Navbar />
-      {/* Column Field Selection */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center space-x-4">
-            <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
-              Select Column Field:
-            </label>
-            <select
-              value={selectedColumnField}
-              onChange={(e) => setSelectedColumnField(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200 min-w-[200px]"
-            >
-              <option value="">Select an option</option>
-              <option value="replace">Replace</option>
-              <option value="data-fill">Data Fill</option>
-            </select>
+      
+      <Navbar />
+      
+      {/* Master Filter Status Display */}
+      {(masterFilters.parliament || masterFilters.assembly || masterFilters.district) && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg mx-6 mt-4 p-3">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="h-2 w-2 bg-blue-400 rounded-full"></div>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-blue-800">
+                <strong>Active Filters:</strong> {[
+                  masterFilters.parliament && `Parliament: ${masterFilters.parliament}`,
+                  masterFilters.assembly && `Assembly: ${masterFilters.assembly}`,
+                  masterFilters.district && `District: ${masterFilters.district}`
+                ].filter(Boolean).join(', ')}
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                Showing voter data filtered by the selected master fields
+              </p>
+            </div>
           </div>
         </div>
+      )}
+      
+      {/* Data Table Section */}
+      <div className="pt-4 pb-4">
+        <DataTable 
+          data={voters}
+          loading={loading}
+          error={error}
+          pagination={pagination}
+          onUpdateVoter={handleVoterUpdate}
+          onPageChange={handlePageChange}
+          onItemsPerPageChange={handleItemsPerPageChange}
+          masterFilters={masterFilters}
+        />
       </div>
-
-    </div>    
+      
+    </div>
   );
 }

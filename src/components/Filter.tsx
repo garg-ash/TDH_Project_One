@@ -5,6 +5,11 @@ import { apiService, FilterOptions, FilterParams } from '../services/api';
 import { Filter as FilterIcon, X, ChevronDown, ChevronUp, Search, Play } from 'lucide-react';
 
 interface FilterProps {
+  masterFilters?: {
+    parliament?: string;
+    assembly?: string;
+    district?: string;
+  };
   onFilterChange: (filters: FilterParams) => void;
   loading?: boolean;
 }
@@ -145,7 +150,7 @@ function SearchableSelect({
   );
 }
 
-export default function Filter({ onFilterChange, loading = false }: FilterProps) {
+export default function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterProps) {
   const [villageNameFilter, setvillageNameFilter] = useState('');
   const [gramPanchayatFilter, setgramPanchayatFilter] = useState('');
   const [dobFilter, setdobFilter] = useState('');
@@ -218,22 +223,65 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
     }
   };
 
-  // Fetch filter options on component mount
+  // Fetch filter options on component mount and when master filters change
   useEffect(() => {
     const fetchFilterOptions = async () => {
       try {
         setLoadingOptions(true);
-        const options = await apiService.fetchFilterOptions();
-        setFilterOptions(options);
+        
+        // Check if master filters are set
+        const hasMasterFilters = masterFilters.parliament || masterFilters.assembly || masterFilters.district;
+        
+        if (hasMasterFilters) {
+          // Fetch dependent filter options based on master filter selection
+          const options = await apiService.fetchDependentFilterOptions(masterFilters);
+          setFilterOptions(options);
+        } else {
+          // Fetch all filter options when no master filters are set
+          const options = await apiService.fetchFilterOptions();
+          setFilterOptions(options);
+        }
       } catch (error) {
         console.error('Failed to fetch filter options:', error);
+        // Fallback to all filter options on error
+        try {
+          const fallbackOptions = await apiService.fetchFilterOptions();
+          setFilterOptions(fallbackOptions);
+        } catch (fallbackError) {
+          console.error('Failed to fetch fallback filter options:', fallbackError);
+        }
       } finally {
         setLoadingOptions(false);
       }
     };
 
     fetchFilterOptions();
-  }, []);
+  }, [masterFilters.parliament, masterFilters.assembly, masterFilters.district]);
+
+  // Reset filter values when master filters change
+  useEffect(() => {
+    // Clear all filter values when master filters change
+    setvillageNameFilter('');
+    sethnoFilter('');
+    setgramPanchayatFilter('');
+    setdobFilter('');
+    setageFromFilter('');
+    setageToFilter('');
+    setnameFilter('');
+    setfnameFilter('');
+    setmalefemaleFilter('');
+    setmobile1Filter('');
+    setmobile2Filter('');
+    setcastIdFilter('');
+    setcastTypeFilter('');
+    setmotherNameFilter('');
+    setsurnameFilter('');
+    setreligionFilter('');
+    setcategoryFilter('');
+    
+    // Also reset the applied filters
+    onFilterChange({});
+  }, [masterFilters.parliament, masterFilters.assembly, masterFilters.district, onFilterChange]);
 
  
   // Function to apply filters when Go button is clicked
@@ -298,7 +346,7 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
             {/* <h2 className="text-xl font-semibold text-gray-800">Data Filters</h2> */}
           </div>
           
-          <div className="flex items-center space-x-3">
+          {/* <div className="flex items-center space-x-3">
            
             
              
@@ -312,7 +360,7 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
                 <span>Clear All</span>
               </button>
             )}
-          </div>
+          </div> */}
         </div>
 
         {/* Loading indicator */}
@@ -320,8 +368,28 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
           <div className="flex items-center justify-center py-4 mb-4">
             <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
             <span className="ml-3 text-sm text-gray-600">
-              {loadingOptions ? 'Loading filter options...' : 'Loading data...'}
+              {loadingOptions ? 'Updating filter options based on location...' : 'Loading data...'}
             </span>
+          </div>
+        )}
+
+        {/* Master Filter Dependency Status */}
+        {(masterFilters.parliament || masterFilters.assembly || masterFilters.district) && !loadingOptions && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="h-2 w-2 bg-blue-400 rounded-full"></div>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-800">
+                  Filter options updated based on: {[
+                    masterFilters.parliament && `Parliament: ${masterFilters.parliament}`,
+                    masterFilters.assembly && `Assembly: ${masterFilters.assembly}`,
+                    masterFilters.district && `District: ${masterFilters.district}`
+                  ].filter(Boolean).join(', ')}
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -429,6 +497,24 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
 
             {/* Buttons on Right Side */}
             <div className="flex items-center space-x-3 flex-shrink-0">
+             
+            <div className="flex items-center space-x-3">
+           
+            
+             
+           {hasActiveFilters && (
+             <button
+               onClick={clearAllFilters}
+               className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all duration-200"
+               disabled={loading}
+             >
+               <X size={16} />
+               <span>Clear All</span>
+             </button>
+           )}
+         </div>
+
+              
               {/* Show More/Less Button */}
               <button
                 onClick={() => setShowMoreFilters(!showMoreFilters)}
@@ -557,20 +643,6 @@ export default function Filter({ onFilterChange, loading = false }: FilterProps)
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
-            </div>
-          )}
-
-          {/* Filter Status */}
-          {hasActiveFilters && (
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  Filters ready to apply: {[villageNameFilter, hnoFilter, gramPanchayatFilter, dobFilter, ageFromFilter, ageToFilter, nameFilter, fnameFilter, malefemaleFilter, mobile1Filter, mobile2Filter, castIdFilter, castTypeFilter, motherNameFilter, surnameFilter, religionFilter, categoryFilter].filter(Boolean).length} selected
-                </div>
-                <div className="text-xs text-gray-500">
-                  Click "Go" to apply filters
-                </div>
-              </div>
             </div>
           )}
         </div>

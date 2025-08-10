@@ -14,7 +14,7 @@ interface UseVotersReturn {
 
 export const useVoters = (): UseVotersReturn => {
   const [data, setData] = useState<Voter[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<PaginationInfo>({
     currentPage: 1,
@@ -22,7 +22,6 @@ export const useVoters = (): UseVotersReturn => {
     totalItems: 0,
     itemsPerPage: 500,
   });
-
 
   const [currentFilters, setCurrentFilters] = useState<FilterParams>({});
 
@@ -32,8 +31,13 @@ export const useVoters = (): UseVotersReturn => {
     filters: FilterParams = {}
   ) => {
     try {
-      setLoading(true);
+      // Only set loading to true if it's not already loading
+      if (!loading) {
+        setLoading(true);
+      }
       setError(null);
+      
+      console.log('Fetching voters with filters:', filters);
       
       const response = await apiService.getVoters(page, limit, filters);
       
@@ -45,6 +49,8 @@ export const useVoters = (): UseVotersReturn => {
         itemsPerPage: limit
       });
       setCurrentFilters(filters);
+      
+      console.log(`Fetched ${response.data?.length || 0} voters with filters:`, filters);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch voters');
       console.error('Error fetching voters:', err);
@@ -59,7 +65,7 @@ export const useVoters = (): UseVotersReturn => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // Removed loading dependency to prevent unnecessary re-creation
 
   const updateVoter = useCallback(async (id: number, voterData: Partial<Voter>) => {
     try {
@@ -101,7 +107,10 @@ export const useVoters = (): UseVotersReturn => {
       try {
         // Try to check if backend is available
         await apiService.healthCheck();
-        await fetchVoters();
+        // Only fetch initial data if no filters are set
+        if (!currentFilters.parliament && !currentFilters.assembly && !currentFilters.district) {
+          await fetchVoters();
+        }
       } catch (err) {
         console.log('Backend not available, using sample data');
         // Use sample data if backend is not available
@@ -184,7 +193,7 @@ export const useVoters = (): UseVotersReturn => {
     };
     
     initializeData();
-  }, [fetchVoters]);
+  }, [fetchVoters]); // Removed currentFilters dependency to prevent circular dependency
 
   return {
     data,

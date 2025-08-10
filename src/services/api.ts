@@ -168,9 +168,25 @@ class ApiService {
     return this.handleResponse<MasterFilterOptions>(response);
   }
 
-  // Filter options
+  // Filter options (all data)
   async fetchFilterOptions(): Promise<FilterOptions> {
     const response = await fetch(`${API_BASE_URL}/filter-options`);
+    return this.handleResponse<FilterOptions>(response);
+  }
+
+  // Dependent filter options based on master filter selection
+  async fetchDependentFilterOptions(masterFilters: {
+    parliament?: string;
+    assembly?: string;
+    district?: string;
+  }): Promise<FilterOptions> {
+    const params = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(masterFilters).filter(([_, value]) => value !== undefined && value !== '')
+      )
+    );
+
+    const response = await fetch(`${API_BASE_URL}/filter-options-dependent?${params}`);
     return this.handleResponse<FilterOptions>(response);
   }
 
