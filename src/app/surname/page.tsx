@@ -33,6 +33,7 @@ export default function SurnamePage() {
     parliament?: string;
     assembly?: string;
     district?: string;
+    block?: string;
   }>({});
 
   // Checkbox states for surname page form fields
@@ -57,7 +58,7 @@ export default function SurnamePage() {
       console.log('Fetching surname data with combined filters:', combinedFilters);
       
       // Check if master filters are applied
-      if (masterFilters.parliament || masterFilters.assembly || masterFilters.district) {
+      if (masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block) {
         console.log('Master filters active, filtering data based on:', masterFilters);
         
         // If master filters are active, filter the sample data based on the selected fields
@@ -88,6 +89,14 @@ export default function SurnamePage() {
           filteredData = filteredData.filter(item => {
             return item.surname.toLowerCase().includes(masterFilters.parliament!.toLowerCase()) ||
                    item.castId.toLowerCase().includes(masterFilters.parliament!.toLowerCase());
+          });
+        }
+        
+        if (masterFilters.block) {
+          // Additional filtering based on block
+          filteredData = filteredData.filter(item => {
+            return item.surname.toLowerCase().includes(masterFilters.block!.toLowerCase()) ||
+                   item.castId.toLowerCase().includes(masterFilters.block!.toLowerCase());
           });
         }
         
@@ -141,7 +150,7 @@ export default function SurnamePage() {
 
   // Effect to refetch data when master filters change
   useEffect(() => {
-    if (masterFilters.parliament || masterFilters.assembly || masterFilters.district) {
+    if (masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block) {
       console.log('Master filters changed, refetching surname data:', masterFilters);
       fetchSurnameData();
     } else {
@@ -156,7 +165,8 @@ export default function SurnamePage() {
     setMasterFilters({
       parliament: filters.parliament,
       assembly: filters.assembly,
-      district: filters.district
+      district: filters.district,
+      block: filters.block
     });
     // Note: Don't call fetchSurnameData here as the useEffect will handle it
   };
@@ -228,7 +238,7 @@ export default function SurnamePage() {
       <Navbar />
       
       {/* Master Filter Status Display */}
-      {(masterFilters.parliament || masterFilters.assembly || masterFilters.district) && (
+              {(masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block) && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg mx-6 mt-4 p-3">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -239,7 +249,8 @@ export default function SurnamePage() {
                 <strong>Active Filters:</strong> {[
                   masterFilters.parliament && `Parliament: ${masterFilters.parliament}`,
                   masterFilters.assembly && `Assembly: ${masterFilters.assembly}`,
-                  masterFilters.district && `District: ${masterFilters.district}`
+                  masterFilters.district && `District: ${masterFilters.district}`,
+                  masterFilters.block && `Block: ${masterFilters.block}`
                 ].filter(Boolean).join(', ')}
               </p>
               <p className="text-xs text-blue-600 mt-1">

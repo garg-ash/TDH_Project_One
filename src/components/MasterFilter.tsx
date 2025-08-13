@@ -9,6 +9,7 @@ interface MasterFilterProps {
     parliament: string;
     assembly: string;
     district: string;
+    block: string;
   }) => void;
 }
 
@@ -147,12 +148,14 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
   const [parliament, setParliament] = useState('');
   const [assembly, setAssembly] = useState('');
   const [district, setDistrict] = useState('');
+  const [block, setBlock] = useState('');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
   // State for dropdown options
   const [parliamentOptions, setParliamentOptions] = useState<string[]>([]);
   const [assemblyOptions, setAssemblyOptions] = useState<string[]>([]);
   const [districtOptions, setDistrictOptions] = useState<string[]>([]);
+  const [blockOptions, setBlockOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch master filter options from backend
@@ -164,6 +167,7 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
         setParliamentOptions(options.parliamentOptions);
         setAssemblyOptions(options.assemblyOptions);
         setDistrictOptions(options.districtOptions);
+        setBlockOptions(options.blockOptions || []);
       } catch (error) {
         console.error('Error fetching master filter options:', error);
       } finally {
@@ -180,6 +184,7 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
       parliament,
       assembly,
       district,
+      block,
     });
   };
 
@@ -188,19 +193,22 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
     setParliament('');
     setAssembly('');
     setDistrict('');
+    setBlock('');
     onMasterFilterChange({
       parliament: '',
       assembly: '',
       district: '',
+      block: '',
     });
   };
 
   // Check if any filters are active
-  const hasActiveFilters = parliament || assembly || district;
+  const hasActiveFilters = parliament || assembly || district || block;
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
+        <div className="animate-pulse bg-gray-200 h-10 rounded-lg"></div>
         <div className="animate-pulse bg-gray-200 h-10 rounded-lg"></div>
         <div className="animate-pulse bg-gray-200 h-10 rounded-lg"></div>
         <div className="animate-pulse bg-gray-200 h-10 rounded-lg"></div>
@@ -212,7 +220,7 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
     <div className="w-full space-y-4">
       <div className="flex items-start justify-between">
         {/* Filter Fields Grid */}
-        <div className="flex-1 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 pr-4">
+        <div className="flex-1 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 pr-4">
           <SearchableSelect
             id="parliament"
             value={parliament}
@@ -243,6 +251,18 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
             onChange={setDistrict}
             options={districtOptions}
             placeholder="ज़िला"
+            label=""
+            disabled={loading}
+            activeDropdown={activeDropdown}
+            onDropdownToggle={setActiveDropdown}
+          />
+
+          <SearchableSelect
+            id="block"
+            value={block}
+            onChange={setBlock}
+            options={blockOptions}
+            placeholder="ब्लॉक"
             label=""
             disabled={loading}
             activeDropdown={activeDropdown}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiService, FilterOptions, FilterParams } from '../services/api';
 import { Filter as FilterIcon, X, ChevronDown, ChevronUp, Search, Play } from 'lucide-react';
 
@@ -9,6 +9,7 @@ interface FilterProps {
     parliament?: string;
     assembly?: string;
     district?: string;
+    block?: string;
   };
   onFilterChange: (filters: FilterParams) => void;
   loading?: boolean;
@@ -150,7 +151,8 @@ function SearchableSelect({
   );
 }
 
-export default function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterProps) {
+function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterProps) {
+  console.log('Filter component rendered with props:', { masterFilters, onFilterChange, loading });
   const [villageNameFilter, setvillageNameFilter] = useState('');
   const [gramPanchayatFilter, setgramPanchayatFilter] = useState('');
   const [dobFilter, setdobFilter] = useState('');
@@ -172,7 +174,6 @@ export default function Filter({ masterFilters = {}, onFilterChange, loading = f
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     villageCodes: [],
-    sections: [],
     villageNames: [],
     gramPanchayats: [],
     patwarCircles: [],
@@ -230,7 +231,7 @@ export default function Filter({ masterFilters = {}, onFilterChange, loading = f
         setLoadingOptions(true);
         
         // Check if master filters are set
-        const hasMasterFilters = masterFilters.parliament || masterFilters.assembly || masterFilters.district;
+        const hasMasterFilters = masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block;
         
         if (hasMasterFilters) {
           // Fetch dependent filter options based on master filter selection
@@ -256,7 +257,7 @@ export default function Filter({ masterFilters = {}, onFilterChange, loading = f
     };
 
     fetchFilterOptions();
-  }, [masterFilters.parliament, masterFilters.assembly, masterFilters.district]);
+  }, [masterFilters.parliament, masterFilters.assembly, masterFilters.district, masterFilters.block]);
 
   // Reset filter values when master filters change
   useEffect(() => {
@@ -281,27 +282,36 @@ export default function Filter({ masterFilters = {}, onFilterChange, loading = f
     
     // Also reset the applied filters
     onFilterChange({});
-  }, [masterFilters.parliament, masterFilters.assembly, masterFilters.district, onFilterChange]);
+  }, [masterFilters.parliament, masterFilters.assembly, masterFilters.district, masterFilters.block, onFilterChange]);
 
  
   // Function to apply filters when Go button is clicked
   const handleApplyFilters = () => {
     const filters: FilterParams = {
-      village: villageNameFilter || hnoFilter || undefined,
+      village: villageNameFilter || undefined,
       tehsil: gramPanchayatFilter || undefined,
       dateOfBirth: dobFilter || undefined,
-      ageMin: parseInt(ageFromFilter) || undefined,
-      ageMax: parseInt(ageToFilter) || undefined,
+      ageMin: ageFromFilter ? parseInt(ageFromFilter) : undefined,
+      ageMax: ageToFilter ? parseInt(ageToFilter) : undefined,
       name: nameFilter || undefined,
       fname: fnameFilter || undefined,
       mobile1: mobile1Filter || undefined,
       mobile2: mobile2Filter || undefined,
       castId: castIdFilter || undefined,
-      castIda: castIdFilter || undefined,
-      booth: undefined, // Not used in current filters
+      castIda: castTypeFilter || undefined, // Use castTypeFilter for castIda
     };
 
-    onFilterChange(filters);
+    // Remove undefined values to avoid sending empty filters
+    const cleanFilters = Object.fromEntries(
+      Object.entries(filters).filter(([_, value]) => value !== undefined && value !== '')
+    );
+
+    console.log('Applying filters:', cleanFilters);
+    
+    // Add a small delay to prevent rapid successive filter changes
+    setTimeout(() => {
+      onFilterChange(cleanFilters);
+    }, 100);
   };
 
   const clearAllFilters = () => {
@@ -327,7 +337,7 @@ export default function Filter({ masterFilters = {}, onFilterChange, loading = f
     onFilterChange({});
   };
 
-  const hasActiveFilters = villageNameFilter || hnoFilter ||
+  const hasActiveFilters = villageNameFilter || 
     gramPanchayatFilter || 
     dobFilter || ageFromFilter || ageToFilter || nameFilter || fnameFilter || 
     malefemaleFilter || mobile1Filter || mobile2Filter || 
@@ -374,7 +384,7 @@ export default function Filter({ masterFilters = {}, onFilterChange, loading = f
         )}
 
         {/* Master Filter Dependency Status */}
-        {(masterFilters.parliament || masterFilters.assembly || masterFilters.district) && !loadingOptions && (
+        {(masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block) && !loadingOptions && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -385,7 +395,8 @@ export default function Filter({ masterFilters = {}, onFilterChange, loading = f
                   Filter options updated based on: {[
                     masterFilters.parliament && `Parliament: ${masterFilters.parliament}`,
                     masterFilters.assembly && `Assembly: ${masterFilters.assembly}`,
-                    masterFilters.district && `District: ${masterFilters.district}`
+                    masterFilters.district && `District: ${masterFilters.district}`,
+                    masterFilters.block && `Block: ${masterFilters.block}`
                   ].filter(Boolean).join(', ')}
                 </p>
               </div>
@@ -536,7 +547,23 @@ export default function Filter({ masterFilters = {}, onFilterChange, loading = f
 
               {/* Go Button */}
               <button
-                onClick={handleApplyFilters}
+                onClick={() => {
+                  console.log('Go button clicked!');
+                  console.log('Current filter values:', {
+                    villageNameFilter,
+                    gramPanchayatFilter,
+                    dobFilter,
+                    ageFromFilter,
+                    ageToFilter,
+                    nameFilter,
+                    fnameFilter,
+                    mobile1Filter,
+                    mobile2Filter,
+                    castIdFilter,
+                    castTypeFilter
+                  });
+                  handleApplyFilters();
+                }}
                 className="flex items-center justify-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm cursor-pointer"
                 disabled={loading}
               >
@@ -649,4 +676,6 @@ export default function Filter({ masterFilters = {}, onFilterChange, loading = f
       </div>
     </div>
   );
-} 
+}
+
+export default React.memo(Filter);

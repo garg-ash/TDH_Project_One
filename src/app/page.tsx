@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { ArrowRight, Settings, LogOut } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowRight, Settings, LogOut, LogIn, Users } from 'lucide-react';
+import Link from 'next/link';
 import Navbar from '../components/Navbar';
 import DataTable from '../components/DataTable';
 import Filter from '../components/Filter';
@@ -14,7 +15,7 @@ interface UserInfo {
   name?: string;
 }
 
-export default function HomePage() {
+function HomePage() {
   const [showModules, setShowModules] = useState(true);
   const [selectedModule, setSelectedModule] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,7 +25,9 @@ export default function HomePage() {
     parliament?: string;
     assembly?: string;
     district?: string;
+    block?: string;
   }>({});
+  const [detailedFilters, setDetailedFilters] = useState<any>({});
 
   useEffect(() => {
     const token = localStorage.getItem('authToken');
@@ -55,7 +58,7 @@ export default function HomePage() {
       id: 'dataset',
       title: 'Data Set',
       description: 'Manage and view voter data with advanced filtering options',
-      icon: '📊'
+      icon: '📋'
     },
     {
       id: 'mobilesetup',
@@ -80,12 +83,15 @@ export default function HomePage() {
     setMasterFilters({
       parliament: filters.parliament,
       assembly: filters.assembly,
-      district: filters.district
+      district: filters.district,
+      block: filters.block
     });
   };
 
   const handleFilterChange = (filters: any) => {
-    console.log('Filter changed:', filters);
+    console.log('Filter changed in main page:', filters);
+    console.log('Setting detailed filters:', filters);
+    setDetailedFilters(filters);
   };
 
   if (showModules) {
@@ -98,32 +104,67 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-3">
-                  <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
-                    <span className="text-sm font-medium text-gray-700">
-                      {userInfo?.name ? userInfo.name.charAt(0).toUpperCase() : userInfo?.email.charAt(0).toUpperCase()}
+                {isAuthenticated ? (
+                  <>
+                    <div className="flex items-center space-x-3">
+                      <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
+                        <span className="text-sm font-medium text-gray-700">
+                          {userInfo?.name ? userInfo.name.charAt(0).toUpperCase() : userInfo?.email.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{userInfo?.name || 'User'}</p>
+                        <p className="text-xs text-gray-500">{userInfo?.email}</p>
+                      </div>
+                    </div>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      userInfo?.role === 'admin' 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {userInfo?.role}
                     </span>
+                  </>
+                ) : (
+                  <div className="flex items-center space-x-3">
+                    <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
+                      <span className="text-sm font-medium text-gray-700">?</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Guest User</p>
+                      <p className="text-xs text-gray-500">Please login to continue</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{userInfo?.name || 'User'}</p>
-                    <p className="text-xs text-gray-500">{userInfo?.email}</p>
-                  </div>
-                </div>
-                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                  userInfo?.role === 'admin' 
-                    ? 'bg-red-100 text-red-800' 
-                    : 'bg-green-100 text-green-800'
-                }`}>
-                  {userInfo?.role}
-                </span>
+                )}
               </div>
-              <button
-                onClick={handleLogout}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </button>
+              <div className="flex items-center space-x-3">
+                {isAuthenticated ? (
+                  <button
+                    onClick={handleLogout}
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
+                  </button>
+                ) : (
+                  <>
+                    <Link
+                      href="/login"
+                      className="inline-flex items-center px-6 py-3 border border-transparent text-base font-semibold rounded-xl shadow-lg text-gray-800 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    >
+                      <LogIn className="w-5 h-5 mr-2 text-gray-700" />
+                      Login
+                    </Link>
+                    <Link
+                      href="/usermanagement"
+                      className="inline-flex items-center px-6 py-3 border border-transparent text-base font-semibold rounded-xl shadow-lg text-gray-800 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    >
+                      <Users className="w-5 h-5 mr-2" />
+                      User Management
+                    </Link>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -160,6 +201,9 @@ export default function HomePage() {
                   <h3 className="text-xl font-semibold text-gray-800 text-center">
                     {module.title}
                   </h3>
+                  <p className="text-sm text-gray-500 text-center mt-2">
+                    {module.description}
+                  </p>
                 </div>
               </div>
             ))}
@@ -197,10 +241,12 @@ export default function HomePage() {
         loading={loading} 
       />
       <div className="pt-4 pb-4">
-        <DataTable masterFilters={masterFilters} />
+        <DataTable masterFilters={masterFilters} detailedFilters={detailedFilters} />
       </div>
     </div>
   );
 }
+
+export default React.memo(HomePage);
 
 

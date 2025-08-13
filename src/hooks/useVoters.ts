@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiService, Voter, FilterParams, PaginationInfo } from '../services/api';
 
 interface UseVotersReturn {
@@ -24,6 +24,9 @@ export const useVoters = (): UseVotersReturn => {
   });
 
   const [currentFilters, setCurrentFilters] = useState<FilterParams>({});
+  
+  // Use ref to track loading state without causing re-renders
+  const loadingRef = useRef(false);
 
   const fetchVoters = useCallback(async (
     page: number = 1,
@@ -31,15 +34,22 @@ export const useVoters = (): UseVotersReturn => {
     filters: FilterParams = {}
   ) => {
     try {
-      // Only set loading to true if it's not already loading
-      if (!loading) {
-        setLoading(true);
+      // Prevent multiple simultaneous requests using ref
+      if (loadingRef.current) {
+        console.log('🔄 Request already in progress, skipping...');
+        return;
       }
+      
+      loadingRef.current = true;
+      setLoading(true);
       setError(null);
       
-      console.log('Fetching voters with filters:', filters);
+      console.log('🔍 Fetching voters with filters:', filters);
+      console.log('🔍 API URL:', process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api');
       
       const response = await apiService.getVoters(page, limit, filters);
+      
+      console.log('✅ API Response:', response);
       
       setData(response.data || []);
       setPagination(response.pagination || {
@@ -50,10 +60,10 @@ export const useVoters = (): UseVotersReturn => {
       });
       setCurrentFilters(filters);
       
-      console.log(`Fetched ${response.data?.length || 0} voters with filters:`, filters);
+      console.log(`✅ Fetched ${response.data?.length || 0} voters with filters:`, filters);
     } catch (err) {
+      console.error('❌ Error fetching voters:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch voters');
-      console.error('Error fetching voters:', err);
       // Set default values on error
       setData([]);
       setPagination({
@@ -63,9 +73,10 @@ export const useVoters = (): UseVotersReturn => {
         itemsPerPage: limit
       });
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  }, []); // Removed loading dependency to prevent unnecessary re-creation
+  }, []); // Remove loading dependency to prevent infinite loops
 
   const updateVoter = useCallback(async (id: number, voterData: Partial<Voter>) => {
     try {
@@ -133,7 +144,6 @@ export const useVoters = (): UseVotersReturn => {
         //     block: 'Block 1',
         //     tehsil: 'Tehsil 1',
         //     village: 'Village 1',
-        //     booth: 'Booth 1',
         //     created_at: '2024-01-01T00:00:00Z',
         //     updated_at: '2024-01-01T00:00:00Z'
         //   },
@@ -155,7 +165,6 @@ export const useVoters = (): UseVotersReturn => {
         //     block: 'Block 2',
         //     tehsil: 'Tehsil 2',
         //     village: 'Village 2',
-        //     booth: 'Booth 2',
         //     created_at: '2024-01-01T00:00:00Z',
         //     updated_at: '2024-01-01T00:00:00Z'
         //   },
@@ -177,7 +186,6 @@ export const useVoters = (): UseVotersReturn => {
         //     block: 'Block 3',
         //     tehsil: 'Tehsil 1',
         //     village: 'Village 3',
-        //     booth: 'Booth 3',
         //     created_at: '2024-01-01T00:00:00Z',
         //     updated_at: '2024-01-01T00:00:00Z'
         //   }

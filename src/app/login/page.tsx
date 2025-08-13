@@ -3,15 +3,15 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Mail, Lock, Eye, EyeOff, Shield, User } from 'lucide-react';
-import { apiService } from '../../services/api';
+import { ArrowLeft, Mail, Lock, Eye, EyeOff, Shield } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
-    password: '',
-    role: ''
+    password: ''
   });
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [loading, setLoading] = useState(false);
@@ -46,10 +46,6 @@ export default function LoginPage() {
       newErrors.password = 'Password is required';
     }
 
-    if (!formData.role) {
-      newErrors.role = 'Role is required';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -65,12 +61,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await apiService.login(formData);
-      
-      // Store token and user info in localStorage
-      localStorage.setItem('authToken', response.token);
-      localStorage.setItem('userInfo', JSON.stringify(response.user));
-      
+      await login(formData.email, formData.password);
       setMessage('Login successful! Redirecting...');
       
       // Redirect to main application after a short delay
@@ -166,38 +157,7 @@ export default function LoginPage() {
               </div>
 
               {/* Role Field */}
-              <div className="space-y-2">
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <User size={18} className="text-gray-400 group-focus-within:text-gray-600 transition-colors duration-200" />
-                  </div>
-                  <select
-                    id="role"
-                    name="role"
-                    required
-                    value={formData.role}
-                    onChange={handleInputChange}
-                    className={`block w-full pl-12 pr-4 py-3.5 border-2 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all duration-200 bg-white/50 backdrop-blur-sm appearance-none cursor-pointer ${
-                      errors.role ? 'border-red-300 focus:ring-red-400 focus:border-red-400' : 'border-gray-200'
-                    } ${formData.role ? 'text-gray-900' : 'text-gray-400'}`}
-                  >
-                    <option value="" disabled>Select your role</option>
-                    <option value="admin">Admin</option>
-                    <option value="user">User</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-                {errors.role && (
-                  <p className="text-sm text-red-600 flex items-center">
-                    <span className="w-1 h-1 bg-red-600 rounded-full mr-2"></span>
-                    {errors.role}
-                  </p>
-                )}
-              </div>
+
 
               {/* Password Field */}
               <div className="space-y-2">
@@ -257,7 +217,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full flex justify-center items-center py-4 px-6 border border-transparent rounded-xl shadow-lg text-sm font-semibold text-white bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+                  className="w-full flex justify-center items-center py-4 px-6 border border-transparent rounded-xl shadow-lg text-sm font-semibold text-white bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                 >
                   {loading ? (
                     <>

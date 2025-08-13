@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -195,14 +195,29 @@ const columns: ColumnDef<Voter>[] = [
     size: 80,
   },
   {
-    accessorKey: 'familyId',
-    header: 'Family Id',
-    size: 150,
+    accessorKey: 'id',
+    header: 'Family ID',
+    size: 80,
   },
   {
     accessorKey: 'name',
     header: 'Name',
     size: 180,
+  },
+  {
+    accessorKey: 'fname',
+    header: 'Father Name',
+    size: 150,
+  },
+  {
+    accessorKey: 'mname',
+    header: 'Mother Name',
+    size: 150,
+  },
+  {
+    accessorKey: 'surname',
+    header: 'Surname',
+    size: 120,
   },
   {
     accessorKey: 'mobile1',
@@ -215,53 +230,73 @@ const columns: ColumnDef<Voter>[] = [
     size: 120,
   },
   {
-    accessorKey: 'dob',
+    accessorKey: 'age',
+    header: 'Age',
+    size: 80,
+  },
+  {
+    accessorKey: 'date_of_birth',
     header: 'DOB',
     size: 120,
   },
   {
-    accessorKey: 'ps',
-    header: 'PS',
-    size: 100,
-  },
-  {
-    accessorKey: 'gp',
-    header: 'GP',
+    accessorKey: 'parliament',
+    header: 'Parliament',
     size: 140,
   },
   {
-    accessorKey: 'gram',
-    header: 'Gram',
+    accessorKey: 'assembly',
+    header: 'Assembly',
     size: 140,
-  },
-  {
-    accessorKey: 'castIda',
-    header: 'Cast IDA',
-    size: 140,
-  },
-  {
-    accessorKey: 'cast',
-    header: 'Cast',
-    size: 120,
-  },
-  {
-    accessorKey: 'pc',
-    header: 'PC',
-    size: 120,
-  },
-  {
-    accessorKey: 'ac',
-    header: 'AC',
-    size: 100,
   },
   {
     accessorKey: 'district',
     header: 'District',
     size: 120,
   },
+  {
+    accessorKey: 'block',
+    header: 'Block',
+    size: 120,
+  },
+  {
+    accessorKey: 'tehsil',
+    header: 'Tehsil',
+    size: 120,
+  },
+  {
+    accessorKey: 'village',
+    header: 'Village',
+    size: 140,
+  },
+  // {
+  //   accessorKey: 'booth',
+  //   header: 'Booth',
+  //   size: 100,
+  // },
+  {
+    accessorKey: 'cast_id',
+    header: 'Cast ID',
+    size: 100,
+  },
+  {
+    accessorKey: 'cast_ida',
+    header: 'Cast IDA',
+    size: 120,
+  },
 ];
 
-export default function DataTable({ masterFilters }: { masterFilters?: { parliament?: string; assembly?: string; district?: string } }) {
+function DataTable({ 
+  masterFilters, 
+  detailedFilters 
+}: { 
+  masterFilters?: { parliament?: string; assembly?: string; district?: string; block?: string };
+  detailedFilters?: any;
+}) {
+  // Memoize the filters to prevent unnecessary re-renders
+  const memoizedMasterFilters = useMemo(() => masterFilters, [JSON.stringify(masterFilters)]);
+  const memoizedDetailedFilters = useMemo(() => detailedFilters, [JSON.stringify(detailedFilters)]);
+  
   const {
     data,
     pagination,
@@ -272,6 +307,9 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     updateVoter,
     fetchVoters
   } = useVoters();
+
+  // Memoize the table data to prevent unnecessary re-renders
+  const memoizedData = useMemo(() => data || [], [data]);
 
   // Excel-like state management
   const [selectedCell, setSelectedCell] = useState<{row: number, column: string} | null>(null);
@@ -291,35 +329,44 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     return ids;
   }, []);
 
-  // Effect to refetch data when master filters change
+  // Effect to refetch data when filters change (combined approach)
   useEffect(() => {
-    // Only refetch if masterFilters actually changed
-    const currentFilters = JSON.stringify(masterFilters);
-    const previousFilters = JSON.stringify(previousMasterFiltersRef.current);
+    // Only refetch if filters actually changed
+    const currentMasterFilters = JSON.stringify(memoizedMasterFilters);
+    const currentDetailedFilters = JSON.stringify(memoizedDetailedFilters);
+    const previousMasterFilters = JSON.stringify(previousMasterFiltersRef.current);
     
-    if (currentFilters !== previousFilters) {
-      previousMasterFiltersRef.current = masterFilters;
+    // Check if either master filters or detailed filters changed
+    if (currentMasterFilters !== previousMasterFilters || 
+        (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) ||
+        (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length === 0)) {
+      
+      previousMasterFiltersRef.current = memoizedMasterFilters;
       
       // Add a small delay to prevent rapid successive API calls
       const timeoutId = setTimeout(() => {
-        if (masterFilters && (masterFilters.parliament || masterFilters.assembly || masterFilters.district)) {
-          console.log('Master filters changed, refetching data with filters:', masterFilters);
-          fetchVoters(1, pagination?.itemsPerPage || 500, masterFilters);
-        } else if (masterFilters && !masterFilters.parliament && !masterFilters.assembly && !masterFilters.district) {
-          // If all master filters are cleared, fetch all data
-          console.log('All master filters cleared, fetching all data');
-          fetchVoters(1, pagination?.itemsPerPage || 500, {});
-        }
+        // Combine master filters with detailed filters
+        const combinedFilters = { ...memoizedMasterFilters, ...memoizedDetailedFilters };
+        
+        // Remove empty/undefined values
+        const cleanFilters = Object.fromEntries(
+          Object.entries(combinedFilters).filter(([_, value]) => 
+            value !== undefined && value !== '' && value !== null
+          )
+        );
+        
+        console.log('Filters changed, refetching data with combined filters:', cleanFilters);
+        fetchVoters(1, pagination?.itemsPerPage || 500, cleanFilters);
       }, 300); // 300ms delay
       
       return () => clearTimeout(timeoutId);
     }
-  }, [masterFilters, fetchVoters, pagination?.itemsPerPage]);
+  }, [memoizedMasterFilters, memoizedDetailedFilters, fetchVoters, pagination?.itemsPerPage]);
 
   const handleUpdateData = useCallback((rowIndex: number, columnId: string, value: any) => {
     try {
       // Only update if we have actual data for this row
-      const voter = data && data[rowIndex];
+      const voter = memoizedData && memoizedData[rowIndex];
       if (!voter) {
         console.log(`Cannot update row ${rowIndex} - no data available`);
         return;
@@ -337,16 +384,16 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     } catch (error) {
       console.error('Error updating voter:', error);
     }
-  }, [data, updateVoter]);
+  }, [memoizedData, updateVoter]);
 
   // Memoize grid dimensions to avoid recalculation
   const gridDimensions = useMemo(() => {
     // Significantly reduce rows for much better performance
     const maxVisibleRows = Math.max(15, pagination?.itemsPerPage || 15);
-    const maxRows = Math.max(maxVisibleRows, data?.length || 0);
+    const maxRows = Math.max(maxVisibleRows, memoizedData?.length || 0);
     const maxCols = columnIds.length;
     return { maxRows, maxCols };
-  }, [pagination?.itemsPerPage, data?.length, columnIds.length]);
+  }, [pagination?.itemsPerPage, memoizedData?.length, columnIds.length]);
 
   // Consolidated navigation function to prevent conflicts
   const navigateToCell = useCallback((fromRow: number, fromColumnId: string, toRow: number, toColumnId: string) => {
@@ -433,13 +480,13 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     if (columnId === 'select') return; // Don't edit row numbers
     
     // Allow editing even for empty cells - get current value or empty string
-    const currentValue = (data && data[rowIndex]) ? (data[rowIndex]?.[columnId as keyof Voter] || '') : '';
+    const currentValue = (memoizedData && memoizedData[rowIndex]) ? (memoizedData[rowIndex]?.[columnId as keyof Voter] || '') : '';
     console.log(`Starting edit via double-click - rowIndex: ${rowIndex}, columnId: ${columnId}, currentValue: "${currentValue}"`);
     setEditValue(String(currentValue));
     setEditingCell({ row: rowIndex, column: columnId });
     setSelectedCell({ row: rowIndex, column: columnId });
     setFocusedCell({ row: rowIndex, column: columnId });
-  }, [data]);
+  }, [memoizedData]);
 
   const handleCellKeyDown = useCallback((e: React.KeyboardEvent, rowIndex: number, columnId: string) => {
     if (editingCell) return; // Don't handle navigation while editing
@@ -516,7 +563,7 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
       case 'F2':
         if (columnId !== 'select') {
           // Allow editing even for empty cells - get current value or empty string
-          const currentValue = (data && data[rowIndex]) ? (data[rowIndex]?.[columnId as keyof Voter] || '') : '';
+          const currentValue = (memoizedData && memoizedData[rowIndex]) ? (memoizedData[rowIndex]?.[columnId as keyof Voter] || '') : '';
           console.log(`Starting edit via F2 key - rowIndex: ${rowIndex}, columnId: ${columnId}, currentValue: "${currentValue}"`);
           setEditValue(String(currentValue));
           setEditingCell({ row: rowIndex, column: columnId });
@@ -551,7 +598,7 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
     } else {
       console.log(`❌ No navigation occurred - staying at ${columnId}[${currentColumnIndex}]`);
     }
-  }, [data, columnIds, editingCell, handleUpdateData, gridDimensions, navigateToCell]);
+  }, [memoizedData, columnIds, editingCell, handleUpdateData, gridDimensions, navigateToCell]);
 
   const handleStopEditing = useCallback(() => {
     setEditingCell(null);
@@ -578,11 +625,11 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
 
   // Effect to initialize first cell selection (only once)
   useEffect(() => {
-    if (data && data.length > 0 && !selectedCell && !loading && columnIds.length > 0) {
+    if (memoizedData && memoizedData.length > 0 && !selectedCell && !loading && columnIds.length > 0) {
       setSelectedCell({ row: 0, column: columnIds[0] });
       setFocusedCell({ row: 0, column: columnIds[0] });
     }
-  }, [data?.length, selectedCell, loading, columnIds[0]]);
+  }, [memoizedData?.length, selectedCell, loading, columnIds[0]]);
 
   // Optimized keyboard handler with direct cell reference
   const currentCellRef = useRef<{row: number, column: string} | null>(null);
@@ -623,7 +670,7 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
   }, [editingCell, handleCellKeyDown]);
 
   const table = useReactTable({
-    data: data || [],
+    data: memoizedData,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -633,11 +680,11 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
   const tableBody = useMemo(() => {
     // Calculate how many rows we need to fill the screen (Excel-like) - reduced for performance
     const maxVisibleRows = Math.max(15, pagination?.itemsPerPage || 15);
-    const totalRows = loading ? maxVisibleRows : Math.max(maxVisibleRows, data?.length || 0);
+    const totalRows = loading ? maxVisibleRows : Math.max(maxVisibleRows, memoizedData?.length || 0);
     
     return Array.from({ length: totalRows }).map((_, index) => {
-      const isDataRow = !loading && data && index < data.length;
-      const rowData = isDataRow ? data[index] : null;
+      const isDataRow = !loading && memoizedData && index < memoizedData.length;
+      const rowData = isDataRow ? memoizedData[index] : null;
       
       return (
         <tr key={isDataRow ? (rowData?.id || index) : `empty-${index}`} style={{ height: '28px' }}>
@@ -683,10 +730,10 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
         </tr>
       );
     });
-  }, [data, loading, pagination?.itemsPerPage, selectedCell?.row, selectedCell?.column, focusedCell?.row, focusedCell?.column, editingCell?.row, editingCell?.column, editValue, columnIds, handleCellClick, handleCellDoubleClick, handleCellKeyDown, handleUpdateData, handleUpdateAndNavigate, setEditValue, handleStopEditing]);
+  }, [memoizedData, loading, pagination?.itemsPerPage, selectedCell?.row, selectedCell?.column, focusedCell?.row, focusedCell?.column, editingCell?.row, editingCell?.column, editValue, columnIds, handleCellClick, handleCellDoubleClick, handleCellKeyDown, handleUpdateData, handleUpdateAndNavigate, setEditValue, handleStopEditing]);
 
   // Handle error and loading states after all hooks are called
-  if (loading && !data.length) {
+  if (loading && !memoizedData.length) {
     return (
       <div className="bg-white rounded-lg shadow-lg p-8">
         <div className="text-center">
@@ -831,4 +878,6 @@ export default function DataTable({ masterFilters }: { masterFilters?: { parliam
       </div>
     </div>
   );
-} 
+}
+
+export default React.memo(DataTable);

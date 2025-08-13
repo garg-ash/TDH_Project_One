@@ -18,7 +18,6 @@ export interface Voter {
   block?: string;
   tehsil?: string;
   village?: string;
-  booth?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -33,7 +32,6 @@ export interface SurnameData {
 
 export interface FilterOptions {
   villageCodes: string[];
-  sections: string[];
   villageNames: string[];
   gramPanchayats: string[];
   patwarCircles: string[];
@@ -65,7 +63,6 @@ export interface FilterParams {
   ageMax?: number;
   dateOfBirth?: string;
   village?: string;
-  booth?: string;
   name?: string;
   fname?: string;
   mname?: string;
@@ -95,40 +92,57 @@ export interface MasterFilterOptions {
 export interface LoginCredentials {
   email: string;
   password: string;
-  role: string;
 }
 
 export interface LoginResponse {
-  token: string;
-  user: {
-    id: number;
-    email: string;
-    role: string;
-    name?: string;
+  success: boolean;
+  message: string;
+  data: {
+    user: {
+      id: number;
+      username: string;
+      email: string;
+      role: 'super_admin' | 'admin' | 'user';
+      permissions: string[];
+      isActive: boolean;
+      createdAt: string;
+      updatedAt: string;
+      lastLogin?: string;
+      createdBy?: number;
+    };
+    token: string;
+    accessibleResources: Record<string, string[]>;
   };
 }
 
 // Admin User Management Interfaces
 export interface User {
   id: number;
+  username: string;
   email: string;
-  role: string;
-  name?: string;
-  created_at: string;
-  updated_at?: string;
+  role: 'super_admin' | 'admin' | 'user';
+  permissions: string[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastLogin?: string;
+  createdBy?: number;
 }
 
 export interface CreateUserData {
+  username: string;
   email: string;
   password: string;
-  role: string;
-  name?: string;
+  role: 'super_admin' | 'admin' | 'user';
+  permissions: string[];
 }
 
 export interface UpdateUserData {
-  email: string;
-  role: string;
-  name?: string;
+  username?: string;
+  email?: string;
+  role?: 'super_admin' | 'admin' | 'user';
+  permissions?: string[];
+  isActive?: boolean;
 }
 
 export interface ChangePasswordData {
@@ -146,7 +160,9 @@ class ApiService {
 
   private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
+      console.error('❌ API Error Response:', response.status, response.statusText);
       const errorData = await response.json().catch(() => ({}));
+      console.error('❌ Error data:', errorData);
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
     return response.json();
@@ -160,6 +176,21 @@ class ApiService {
       body: JSON.stringify(credentials),
     });
     return this.handleResponse<LoginResponse>(response);
+  }
+
+  async getProfile(): Promise<{ success: boolean; data: { user: User; accessibleResources: Record<string, string[]> } }> {
+    const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<{ success: boolean; data: { user: User; accessibleResources: Record<string, string[]> } }>(response);
+  }
+
+  async logout(): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<{ success: boolean; message: string }>(response);
   }
 
   // Master filter options
@@ -179,6 +210,7 @@ class ApiService {
     parliament?: string;
     assembly?: string;
     district?: string;
+    block?: string;
   }): Promise<FilterOptions> {
     const params = new URLSearchParams(
       Object.fromEntries(
@@ -204,7 +236,14 @@ class ApiService {
       )
     });
 
-    const response = await fetch(`${API_BASE_URL}/voters?${params}`);
+    const url = `${API_BASE_URL}/voters?${params}`;
+    console.log('🌐 Making API request to:', url);
+    console.log('🌐 With filters:', filters);
+
+    const response = await fetch(url);
+    console.log('🌐 Response status:', response.status);
+    console.log('🌐 Response headers:', Object.fromEntries(response.headers.entries()));
+    
     return this.handleResponse<VotersResponse>(response);
   }
 
@@ -288,46 +327,46 @@ class ApiService {
   }
 
   // Admin User Management Methods
-  async getAllUsers(): Promise<User[]> {
-    const response = await fetch(`${API_BASE_URL}/admin/users`, {
+  async getUsers(): Promise<{ success: boolean; data: User[] }> {
+    const response = await fetch(`${API_BASE_URL}/auth/users`, {
       headers: this.getAuthHeaders(),
     });
-    return this.handleResponse<User[]>(response);
+    return this.handleResponse<{ success: boolean; data: User[] }>(response);
   }
 
-  async createUser(userData: CreateUserData): Promise<{ message: string; user: User }> {
-    const response = await fetch(`${API_BASE_URL}/admin/users`, {
+  async createUser(userData: CreateUserData): Promise<{ success: boolean; message: string; data: User }> {
+    const response = await fetch(`${API_BASE_URL}/auth/users`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(userData),
     });
-    return this.handleResponse<{ message: string; user: User }>(response);
+    return this.handleResponse<{ success: boolean; message: string; data: User }>(response);
   }
 
-  async updateUser(id: number, userData: UpdateUserData): Promise<{ message: string; user: User }> {
-    const response = await fetch(`${API_BASE_URL}/admin/users/${id}`, {
+  async updateUser(id: number, userData: UpdateUserData): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/users/${id}`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(userData),
     });
-    return this.handleResponse<{ message: string; user: User }>(response);
+    return this.handleResponse<{ success: boolean; message: string }>(response);
   }
 
-  async deleteUser(id: number): Promise<{ message: string }> {
-    const response = await fetch(`${API_BASE_URL}/admin/users/${id}`, {
+  async deleteUser(id: number): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/users/${id}`, {
       method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
-    return this.handleResponse<{ message: string }>(response);
+    return this.handleResponse<{ success: boolean; message: string }>(response);
   }
 
-  async changeUserPassword(id: number, passwordData: ChangePasswordData): Promise<{ message: string }> {
-    const response = await fetch(`${API_BASE_URL}/admin/users/${id}/change-password`, {
-      method: 'POST',
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      method: 'PUT',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify(passwordData),
+      body: JSON.stringify({ currentPassword, newPassword }),
     });
-    return this.handleResponse<{ message: string }>(response);
+    return this.handleResponse<{ success: boolean; message: string }>(response);
   }
 }
 
