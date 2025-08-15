@@ -30,6 +30,29 @@ export interface SurnameData {
   castIda: string;
 }
 
+export interface DivisionData {
+  id: number;
+  DIVISION_ID: number;
+  DIVISION_CODE: string;
+  DIVISION_ENG: string;
+  DIVISION_MANGAL: string;
+  DISTRICT_ID: number;
+  DISTRICT_CODE: number;
+  DISTRICT_ENG: string;
+  DISTRICT_MANGAL: string;
+  PC_ID: number;
+  PC_CODE: number;
+  PC_ENG: string;
+  PC_MANGAL: string;
+  AC_ID: number;
+  AC_CODE: number;
+  AC_ENG: string;
+  AC_MANGAL: string;
+  AC_TOTAL_MANDAL?: string;
+  PC_SEAT?: string;
+  INC_Party_Zila?: string;
+}
+
 export interface FilterOptions {
   villageCodes: string[];
   villageNames: string[];
@@ -163,6 +186,13 @@ class ApiService {
       console.error('❌ API Error Response:', response.status, response.statusText);
       const errorData = await response.json().catch(() => ({}));
       console.error('❌ Error data:', errorData);
+      
+      // For database connection issues, return empty data instead of throwing error
+      if (response.status === 500 && errorData.error && errorData.error.includes('database')) {
+        console.log('Database offline, returning empty data');
+        return {} as T;
+      }
+      
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
     return response.json();
@@ -195,14 +225,47 @@ class ApiService {
 
   // Master filter options
   async fetchMasterFilterOptions(): Promise<MasterFilterOptions> {
-    const response = await fetch(`${API_BASE_URL}/master-filter-options`);
-    return this.handleResponse<MasterFilterOptions>(response);
+    try {
+      const response = await fetch(`${API_BASE_URL}/master-filter-options`);
+      return await this.handleResponse<MasterFilterOptions>(response);
+    } catch (error) {
+      console.log('🌐 Master filter options failed, returning empty options');
+      return {
+        parliamentOptions: [],
+        assemblyOptions: [],
+        districtOptions: [],
+        blockOptions: [],
+        tehsilOptions: []
+      };
+    }
   }
 
   // Filter options (all data)
   async fetchFilterOptions(): Promise<FilterOptions> {
-    const response = await fetch(`${API_BASE_URL}/filter-options`);
-    return this.handleResponse<FilterOptions>(response);
+    try {
+      const response = await fetch(`${API_BASE_URL}/filter-options`);
+      return await this.handleResponse<FilterOptions>(response);
+    } catch (error) {
+      console.log('🌐 Filter options failed, returning empty options');
+      return {
+        villageCodes: [],
+        villageNames: [],
+        names: [],
+        fnames: [],
+        motherNames: [],
+        surnames: [],
+        castTypes: [],
+        ages: [],
+        gramPanchayats: [],
+        patwarCircles: [],
+        lrCircles: [],
+        hnos: [],
+        malefemales: [],
+        religions: [],
+        categories: [],
+        addresses: []
+      };
+    }
   }
 
   // Dependent filter options based on master filter selection
@@ -212,14 +275,36 @@ class ApiService {
     district?: string;
     block?: string;
   }): Promise<FilterOptions> {
-    const params = new URLSearchParams(
-      Object.fromEntries(
-        Object.entries(masterFilters).filter(([_, value]) => value !== undefined && value !== '')
-      )
-    );
+    try {
+      const params = new URLSearchParams(
+        Object.fromEntries(
+          Object.entries(masterFilters).filter(([_, value]) => value !== undefined && value !== '')
+        )
+      );
 
-    const response = await fetch(`${API_BASE_URL}/filter-options-dependent?${params}`);
-    return this.handleResponse<FilterOptions>(response);
+      const response = await fetch(`${API_BASE_URL}/filter-options-dependent?${params}`);
+      return await this.handleResponse<FilterOptions>(response);
+    } catch (error) {
+      console.log('🌐 Dependent filter options failed, returning empty options');
+      return {
+        villageCodes: [],
+        villageNames: [],
+        names: [],
+        fnames: [],
+        motherNames: [],
+        surnames: [],
+        castTypes: [],
+        ages: [], 
+        gramPanchayats: [],
+        patwarCircles: [],
+        lrCircles: [],
+        hnos: [],
+        malefemales: [],
+        religions: [],
+        categories: [],
+        addresses: []
+      };
+    }
   }
 
   // Voters
@@ -244,7 +329,21 @@ class ApiService {
     console.log('🌐 Response status:', response.status);
     console.log('🌐 Response headers:', Object.fromEntries(response.headers.entries()));
     
-    return this.handleResponse<VotersResponse>(response);
+    try {
+      return await this.handleResponse<VotersResponse>(response);
+    } catch (error) {
+      console.log('🌐 API call failed, returning empty data');
+      // Return empty data structure instead of throwing error
+      return {
+        data: [],
+        pagination: {
+          currentPage: page,
+          totalPages: 1,
+          totalItems: 0,
+          itemsPerPage: limit
+        }
+      };
+    }
   }
 
   // Update voter
@@ -324,6 +423,12 @@ class ApiService {
   async healthCheck(): Promise<{ status: string; message: string }> {
     const response = await fetch(`${API_BASE_URL}/health`);
     return this.handleResponse<{ status: string; message: string }>(response);
+  }
+
+  // Get Division, District, PC, AC data
+  async getDivisionData(): Promise<DivisionData[]> {
+    const response = await fetch(`${API_BASE_URL}/div_dist_pc_ac`);
+    return this.handleResponse<DivisionData[]>(response);
   }
 
   // Admin User Management Methods

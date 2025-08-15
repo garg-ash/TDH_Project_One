@@ -8,6 +8,7 @@ import DataTable from '../components/DataTable';
 import Filter from '../components/Filter';
 import MasterFilter from '../components/MasterFilter';
 
+
 interface UserInfo {
   id: number;
   email: string;
@@ -39,7 +40,7 @@ function HomePage() {
         setUserInfo(user);
         setIsAuthenticated(true);
       } catch (error) {
-        console.error('Error parsing user info:', error);
+        // console.error('Error parsing user info:', error);
         handleLogout();
       }
     }
@@ -89,8 +90,8 @@ function HomePage() {
   };
 
   const handleFilterChange = (filters: any) => {
-    console.log('Filter changed in main page:', filters);
-    console.log('Setting detailed filters:', filters);
+    // console.log('Filter changed in main page:', filters);
+    // console.log('Setting detailed filters:', filters);
     setDetailedFilters(filters);
   };
 

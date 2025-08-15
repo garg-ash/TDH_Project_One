@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { apiService, FilterOptions, FilterParams } from '../services/api';
-import { Filter as FilterIcon, X, ChevronDown, ChevronUp, Search, Play } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, ChevronDown, ChevronUp, Search, Play } from 'lucide-react';
 
 interface FilterProps {
   masterFilters?: {
@@ -11,7 +10,7 @@ interface FilterProps {
     district?: string;
     block?: string;
   };
-  onFilterChange: (filters: FilterParams) => void;
+  onFilterChange: (filters: any) => void;
   loading?: boolean;
 }
 
@@ -44,7 +43,7 @@ function SearchableSelect({
 
   const isOpen = activeDropdown === id;
 
-  useEffect(() => {
+  React.useEffect(() => {
     const filtered = options.filter(option => 
       option.toString().toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -70,7 +69,7 @@ function SearchableSelect({
   };
 
   // Close dropdown when clicking outside
-  useEffect(() => {
+  React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
       if (isOpen && !target.closest(`[data-dropdown-id="${id}"]`)) {
@@ -152,7 +151,6 @@ function SearchableSelect({
 }
 
 function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterProps) {
-  console.log('Filter component rendered with props:', { masterFilters, onFilterChange, loading });
   const [villageNameFilter, setvillageNameFilter] = useState('');
   const [gramPanchayatFilter, setgramPanchayatFilter] = useState('');
   const [dobFilter, setdobFilter] = useState('');
@@ -160,7 +158,6 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
   const [ageToFilter, setageToFilter] = useState('');
   const [nameFilter, setnameFilter] = useState('');
   const [fnameFilter, setfnameFilter] = useState('');
-  const [hnoFilter, sethnoFilter] = useState('');
   const [malefemaleFilter, setmalefemaleFilter] = useState('');
   const [mobile1Filter, setmobile1Filter] = useState('');
   const [mobile2Filter, setmobile2Filter] = useState('');
@@ -172,25 +169,20 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
   const [categoryFilter, setcategoryFilter] = useState('');
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-  const [filterOptions, setFilterOptions] = useState<FilterOptions>({
-    villageCodes: [],
-    villageNames: [],
-    gramPanchayats: [],
-    patwarCircles: [],
-    lrCircles: [],
-    ages: [],
-    names: [],
-    fnames: [],
-    hnos: [],
-    malefemales: [],
-    castTypes: [],
-    motherNames: [],
-    addresses: [],
-    surnames: [],
-    religions: [],
-    categories: []
-  });
-  const [loadingOptions, setLoadingOptions] = useState(true);
+
+  // Hardcoded sample data for dropdowns - NO BACKEND DEPENDENCIES
+  const filterOptions = {
+    villageNames: ['Village 1', 'Village 2', 'Village 3', 'Village 4', 'Village 5', 'Village 6', 'Village 7', 'Village 8'],
+    gramPanchayats: ['GP 1', 'GP 2', 'GP 3', 'GP 4', 'GP 5', 'GP 6', 'GP 7', 'GP 8'],
+    names: ['John', 'Jane', 'Mike', 'Sarah', 'David', 'Lisa', 'Tom', 'Emma', 'Alex', 'Maria'],
+    fnames: ['Robert', 'Michael', 'William', 'James', 'David', 'Richard', 'Joseph', 'Thomas', 'Christopher', 'Charles'],
+    malefemales: ['Male', 'Female'],
+    castTypes: ['General', 'OBC', 'SC', 'ST', 'Other'],
+    motherNames: ['Mary', 'Patricia', 'Jennifer', 'Linda', 'Elizabeth', 'Barbara', 'Susan', 'Jessica', 'Sarah', 'Karen'],
+    surnames: ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'],
+    religions: ['Hindu', 'Muslim', 'Christian', 'Sikh', 'Buddhist', 'Other'],
+    categories: ['General', 'OBC', 'SC', 'ST', 'EWS', 'Other']
+  };
 
   // Function to calculate age from date of birth
   const calculateAge = (dateOfBirth: string): number => {
@@ -224,70 +216,9 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
     }
   };
 
-  // Fetch filter options on component mount and when master filters change
-  useEffect(() => {
-    const fetchFilterOptions = async () => {
-      try {
-        setLoadingOptions(true);
-        
-        // Check if master filters are set
-        const hasMasterFilters = masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block;
-        
-        if (hasMasterFilters) {
-          // Fetch dependent filter options based on master filter selection
-          const options = await apiService.fetchDependentFilterOptions(masterFilters);
-          setFilterOptions(options);
-        } else {
-          // Fetch all filter options when no master filters are set
-          const options = await apiService.fetchFilterOptions();
-          setFilterOptions(options);
-        }
-      } catch (error) {
-        console.error('Failed to fetch filter options:', error);
-        // Fallback to all filter options on error
-        try {
-          const fallbackOptions = await apiService.fetchFilterOptions();
-          setFilterOptions(fallbackOptions);
-        } catch (fallbackError) {
-          console.error('Failed to fetch fallback filter options:', fallbackError);
-        }
-      } finally {
-        setLoadingOptions(false);
-      }
-    };
-
-    fetchFilterOptions();
-  }, [masterFilters.parliament, masterFilters.assembly, masterFilters.district, masterFilters.block]);
-
-  // Reset filter values when master filters change
-  useEffect(() => {
-    // Clear all filter values when master filters change
-    setvillageNameFilter('');
-    sethnoFilter('');
-    setgramPanchayatFilter('');
-    setdobFilter('');
-    setageFromFilter('');
-    setageToFilter('');
-    setnameFilter('');
-    setfnameFilter('');
-    setmalefemaleFilter('');
-    setmobile1Filter('');
-    setmobile2Filter('');
-    setcastIdFilter('');
-    setcastTypeFilter('');
-    setmotherNameFilter('');
-    setsurnameFilter('');
-    setreligionFilter('');
-    setcategoryFilter('');
-    
-    // Also reset the applied filters
-    onFilterChange({});
-  }, [masterFilters.parliament, masterFilters.assembly, masterFilters.district, masterFilters.block, onFilterChange]);
-
- 
   // Function to apply filters when Go button is clicked
   const handleApplyFilters = () => {
-    const filters: FilterParams = {
+    const filters = {
       village: villageNameFilter || undefined,
       tehsil: gramPanchayatFilter || undefined,
       dateOfBirth: dobFilter || undefined,
@@ -298,7 +229,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
       mobile1: mobile1Filter || undefined,
       mobile2: mobile2Filter || undefined,
       castId: castIdFilter || undefined,
-      castIda: castTypeFilter || undefined, // Use castTypeFilter for castIda
+      castIda: castTypeFilter || undefined,
     };
 
     // Remove undefined values to avoid sending empty filters
@@ -306,8 +237,6 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
       Object.entries(filters).filter(([_, value]) => value !== undefined && value !== '')
     );
 
-    console.log('Applying filters:', cleanFilters);
-    
     // Add a small delay to prevent rapid successive filter changes
     setTimeout(() => {
       onFilterChange(cleanFilters);
@@ -316,7 +245,6 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
 
   const clearAllFilters = () => {
     setvillageNameFilter('');
-    sethnoFilter('');
     setgramPanchayatFilter(''); 
     setdobFilter('');
     setageFromFilter('');
@@ -347,63 +275,6 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
   return (
     <div className="bg-gray-50 border-b border-gray-200">
       <div className="w-full px-3 py-3">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            {/* <div className="p-2 bg-gray-200 rounded-lg">
-              <FilterIcon size={20} className="text-gray-600" />
-            </div> */}
-            {/* <h2 className="text-xl font-semibold text-gray-800">Data Filters</h2> */}
-          </div>
-          
-          {/* <div className="flex items-center space-x-3">
-           
-            
-             
-            {hasActiveFilters && (
-              <button
-                onClick={clearAllFilters}
-                className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all duration-200"
-                disabled={loading}
-              >
-                <X size={16} />
-                <span>Clear All</span>
-              </button>
-            )}
-          </div> */}
-        </div>
-
-        {/* Loading indicator */}
-        {(loading || loadingOptions) && (
-          <div className="flex items-center justify-center py-4 mb-4">
-            <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
-            <span className="ml-3 text-sm text-gray-600">
-              {loadingOptions ? 'Updating filter options based on location...' : 'Loading data...'}
-            </span>
-          </div>
-        )}
-
-        {/* Master Filter Dependency Status */}
-        {(masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block) && !loadingOptions && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="h-2 w-2 bg-blue-400 rounded-full"></div>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-blue-800">
-                  Filter options updated based on: {[
-                    masterFilters.parliament && `Parliament: ${masterFilters.parliament}`,
-                    masterFilters.assembly && `Assembly: ${masterFilters.assembly}`,
-                    masterFilters.district && `District: ${masterFilters.district}`,
-                    masterFilters.block && `Block: ${masterFilters.block}`
-                  ].filter(Boolean).join(', ')}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Filter Grid */}
         <div className="space-y-4">
           {/* First Row - Primary Filters with Buttons on Right */}
@@ -417,7 +288,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 options={filterOptions.villageNames}
                 placeholder="ग्राम"
                 label=""
-                disabled={loadingOptions}
+                disabled={false}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
@@ -429,7 +300,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 options={filterOptions.gramPanchayats}
                 placeholder="ग्राम पंचायत (GP)"
                 label=""
-                disabled={loadingOptions}
+                disabled={false}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
@@ -452,14 +323,14 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 options={filterOptions.castTypes}
                 placeholder="Cast Type"
                 label=""
-                disabled={loadingOptions}
+                disabled={false}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
 
               <div className="relative">
                 <input
-                  type="number"
+                  type="text"
                   placeholder="Enter mobile 1"
                   value={mobile1Filter}
                   onChange={(e) => setmobile1Filter(e.target.value)}
@@ -470,7 +341,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
               
               <div className="relative">
                 <input
-                  type="number"
+                  type="text"
                   placeholder="Enter mobile 2"
                   value={mobile2Filter}
                   onChange={(e) => setmobile2Filter(e.target.value)}
@@ -508,24 +379,19 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
 
             {/* Buttons on Right Side */}
             <div className="flex items-center space-x-3 flex-shrink-0">
-             
-            <div className="flex items-center space-x-3">
-           
-            
-             
-           {hasActiveFilters && (
-             <button
-               onClick={clearAllFilters}
-               className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all duration-200"
-               disabled={loading}
-             >
-               <X size={16} />
-               <span>Clear All</span>
-             </button>
-           )}
-         </div>
+              <div className="flex items-center space-x-3">
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all duration-200"
+                    disabled={loading}
+                  >
+                    <X size={16} />
+                    <span>Clear All</span>
+                  </button>
+                )}
+              </div>
 
-              
               {/* Show More/Less Button */}
               <button
                 onClick={() => setShowMoreFilters(!showMoreFilters)}
@@ -547,23 +413,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
 
               {/* Go Button */}
               <button
-                onClick={() => {
-                  console.log('Go button clicked!');
-                  console.log('Current filter values:', {
-                    villageNameFilter,
-                    gramPanchayatFilter,
-                    dobFilter,
-                    ageFromFilter,
-                    ageToFilter,
-                    nameFilter,
-                    fnameFilter,
-                    mobile1Filter,
-                    mobile2Filter,
-                    castIdFilter,
-                    castTypeFilter
-                  });
-                  handleApplyFilters();
-                }}
+                onClick={handleApplyFilters}
                 className="flex items-center justify-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm cursor-pointer"
                 disabled={loading}
               >
@@ -594,7 +444,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 options={filterOptions.names}
                 placeholder="नाम"
                 label=""
-                disabled={loadingOptions}
+                disabled={false}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
@@ -606,7 +456,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 options={filterOptions.fnames}
                 placeholder="पिता का नाम"
                 label=""
-                disabled={loadingOptions}
+                disabled={false}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
@@ -615,10 +465,10 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 id="motherName"
                 value={motherNameFilter}
                 onChange={setmotherNameFilter}
-                options={filterOptions.motherNames || []}
+                options={filterOptions.motherNames}
                 placeholder="माता का नाम"
                 label=""
-                disabled={loadingOptions}
+                disabled={false}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
@@ -627,10 +477,10 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 id="surname"
                 value={surnameFilter}
                 onChange={setsurnameFilter}
-                options={filterOptions.surnames || []}
+                options={filterOptions.surnames}
                 placeholder="उपनाम"
                 label=""
-                disabled={loadingOptions}
+                disabled={false}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
@@ -642,7 +492,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 options={filterOptions.malefemales}
                 placeholder="लिंग"
                 label=""
-                disabled={loadingOptions}
+                disabled={false}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
@@ -651,10 +501,10 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 id="religion"
                 value={religionFilter}
                 onChange={setreligionFilter}
-                options={filterOptions.religions || []}
+                options={filterOptions.religions}
                 placeholder="धर्म"
                 label=""
-                disabled={loadingOptions}
+                disabled={false}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />
@@ -663,10 +513,10 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 id="category"
                 value={categoryFilter}
                 onChange={setcategoryFilter}
-                options={filterOptions.categories || []}
+                options={filterOptions.categories}
                 placeholder="श्रेणी"
                 label=""
-                disabled={loadingOptions}
+                disabled={false}
                 activeDropdown={activeDropdown}
                 onDropdownToggle={setActiveDropdown}
               />

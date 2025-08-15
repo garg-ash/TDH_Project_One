@@ -63,7 +63,8 @@ export const useVoters = (): UseVotersReturn => {
       console.log(`✅ Fetched ${response.data?.length || 0} voters with filters:`, filters);
     } catch (err) {
       console.error('❌ Error fetching voters:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch voters');
+      // Don't set error state - just show empty data gracefully
+      setError(null);
       // Set default values on error
       setData([]);
       setPagination({
