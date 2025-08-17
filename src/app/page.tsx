@@ -90,8 +90,8 @@ function HomePage() {
   };
 
   const handleFilterChange = (filters: any) => {
-    // console.log('Filter changed in main page:', filters);
-    // console.log('Setting detailed filters:', filters);
+    console.log('📥 Received filters from Filter component:', filters);
+    console.log('🔧 Setting detailed filters in main page:', filters);
     setDetailedFilters(filters);
   };
 

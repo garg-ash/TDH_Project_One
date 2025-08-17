@@ -46,7 +46,7 @@ export default function GridTable() {
     setLoading(true);
     setError(null);
     
-    fetch('http://localhost:5002/api/div_dist_pc_ac')
+          fetch('http://localhost:5002/api/div_dist_pc_ac')
       .then((res) => {
         console.log('Response status:', res.status);
         console.log('Response headers:', res.headers);

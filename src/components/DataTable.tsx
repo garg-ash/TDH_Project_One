@@ -2,6 +2,55 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
+
+// Add CSS for copy blink effect
+const copyBlinkCSS = `
+  .copy-blink-effect {
+    animation: copyBlink 0.3s ease-in-out;
+    background-color: #dbeafe !important;
+    border: 2px solid #3b82f6 !important;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+    z-index: 1000 !important;
+  }
+  
+  @keyframes copyBlink {
+    0% { 
+      opacity: 1; 
+      transform: scale(1); 
+      background-color: #dbeafe !important;
+      border: 2px solid #3b82f6 !important;
+    }
+    50% { 
+      opacity: 0.7; 
+      transform: scale(1.02); 
+      background-color: #93c5fd !important;
+      border: 2px solid #1d4ed8 !important;
+    }
+    100% { 
+      opacity: 1; 
+      transform: scale(1); 
+      background-color: #dbeafe !important;
+      border: 2px solid #3b82f6 !important;
+    }
+  }
+`;
+
+// Inject CSS with better error handling
+if (typeof document !== 'undefined') {
+  try {
+    // Check if style already exists
+    let existingStyle = document.getElementById('copy-blink-css');
+    if (!existingStyle) {
+      const style = document.createElement('style');
+      style.id = 'copy-blink-css';
+      style.textContent = copyBlinkCSS;
+      document.head.appendChild(style);
+      console.log('✅ Copy blink CSS injected successfully');
+    }
+  } catch (error) {
+    console.error('❌ Failed to inject copy blink CSS:', error);
+  }
+}
 import {
   useReactTable,
   getCoreRowModel,
@@ -68,6 +117,7 @@ interface ExcelCellProps {
   setEditValue: (value: string) => void;
   onStopEditing: () => void;
   loading?: boolean;
+  isCopyBlinking?: boolean;
 }
 
 const ExcelCell = memo(function ExcelCell({ 
@@ -86,7 +136,8 @@ const ExcelCell = memo(function ExcelCell({
   editValue,
   setEditValue,
   onStopEditing,
-  loading = false 
+  loading = false,
+  isCopyBlinking = false
 }: ExcelCellProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -106,12 +157,8 @@ const ExcelCell = memo(function ExcelCell({
   const handleKeyDown = async (e: React.KeyboardEvent) => {
     if (isEditing) {
       if (e.key === 'Enter') {
-        console.log(`ExcelCell: Saving on Enter and navigating down - rowIndex: ${rowIndex}, columnId: ${columnId}, editValue: "${editValue}"`);
-        console.log(`ExcelCell: Original value was: "${value}"`);
         try {
-          console.log(`ExcelCell: Calling onUpdateAndNavigate with: rowIndex=${rowIndex}, columnId=${columnId}, value="${editValue}"`);
           await onUpdateAndNavigate(rowIndex, columnId, editValue, 'ArrowDown');
-          console.log(`ExcelCell: onUpdateAndNavigate completed successfully`);
           onStopEditing();
         } catch (error) {
           console.error('Error saving on Enter:', error);
@@ -124,7 +171,6 @@ const ExcelCell = memo(function ExcelCell({
         e.preventDefault();
         e.stopPropagation();
       } else if (e.key === 'Tab') {
-        console.log(`ExcelCell: Saving on Tab and navigating right - rowIndex: ${rowIndex}, columnId: ${columnId}, editValue: "${editValue}"`);
         onUpdateAndNavigate(rowIndex, columnId, editValue, e.shiftKey ? 'ArrowLeft' : 'ArrowRight');
         onStopEditing();
         e.preventDefault();
@@ -142,12 +188,8 @@ const ExcelCell = memo(function ExcelCell({
 
   const handleBlur = async () => {
     if (isEditing) {
-      console.log(`ExcelCell: Saving on Blur - rowIndex: ${rowIndex}, columnId: ${columnId}, editValue: "${editValue}"`);
-      console.log(`ExcelCell: Original value was: "${value}"`);
       try {
-        console.log(`ExcelCell: Calling onUpdate with: rowIndex=${rowIndex}, columnId=${columnId}, value="${editValue}"`);
         await onUpdate(rowIndex, columnId, editValue);
-        console.log(`ExcelCell: onUpdate completed successfully`);
         onStopEditing();
       } catch (error) {
         console.error('Error saving on blur:', error);
@@ -157,7 +199,16 @@ const ExcelCell = memo(function ExcelCell({
   };
 
   const handleClick = (e: React.MouseEvent) => {
-    onCellClick(rowIndex, columnId, e);
+    // Direct editing: Click to edit immediately (like Excel)
+    if (columnId !== 'select') {
+      const currentValue = (value || '').toString();
+      setEditValue(currentValue);
+      onCellClick(rowIndex, columnId, e);
+      // Start editing immediately
+      onCellDoubleClick(rowIndex, columnId);
+    } else {
+      onCellClick(rowIndex, columnId, e);
+    }
   };
 
   // Row header (Sr. No.) styling
@@ -194,7 +245,10 @@ const ExcelCell = memo(function ExcelCell({
     ${isEditing ? 'bg-white' : ''}
     ${!isEditing && !isSelected && !isFocused ? 'hover:bg-gray-50' : ''}
     ${loading ? 'opacity-50 cursor-not-allowed' : ''}
+    ${isCopyBlinking && (isSelected || isInSelectionRange) ? 'copy-blink-effect' : ''}
   `;
+  
+
 
   // Excel-like selection styling with different colors for different selection states
   let selectionStyle = {};
@@ -230,6 +284,11 @@ const ExcelCell = memo(function ExcelCell({
           onChange={(e) => setEditValue(e.target.value)}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
+          onPaste={(e) => {
+            e.preventDefault();
+            const pastedText = e.clipboardData.getData('text');
+            setEditValue(pastedText);
+          }}
           className="w-full h-full bg-white text-sm text-gray-900 font-normal"
           style={{ 
             margin: '-8px -8px -8px -8px', 
@@ -268,9 +327,9 @@ const columns: ColumnDef<Voter>[] = [
     size: 80,
   },
   {
-    accessorKey: 'id',
+    accessorKey: 'division_id',
     header: 'Family ID',
-    size: 80,
+    size: 120,
   },
   {
     accessorKey: 'name',
@@ -359,6 +418,28 @@ const columns: ColumnDef<Voter>[] = [
   },
 ];
 
+// Helper function to calculate age from date of birth
+const calculateAge = (dateOfBirth: string): string => {
+  if (!dateOfBirth) return '';
+  
+  try {
+    const dob = new Date(dateOfBirth);
+    if (isNaN(dob.getTime())) return '';
+    
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age--;
+    }
+    
+    return age.toString();
+  } catch (error) {
+    return '';
+  }
+};
+
 function DataTable({ 
   masterFilters, 
   detailedFilters 
@@ -371,12 +452,18 @@ function DataTable({
   const memoizedDetailedFilters = useMemo(() => detailedFilters, [JSON.stringify(detailedFilters)]);
   
   const [data, setData] = useState<Voter[]>([]);
-  const [pagination, setPagination] = useState({
+  const [pagination, setPagination] = useState<{
+    currentPage: number;
+    itemsPerPage: number;
+    totalItems: number | string;
+    totalPages: number;
+  }>({
     currentPage: 1,
-    itemsPerPage: 500,
+    itemsPerPage: 1000, // Show 1000 rows per page as requested
     totalItems: 0,
     totalPages: 0,
   });
+  const [goToPageInput, setGoToPageInput] = useState<string>('1');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -386,75 +473,143 @@ function DataTable({
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching data from div_dist_pc_ac API...');
       
-      const response = await fetch('http://localhost:5002/api/div_dist_pc_ac');
-      console.log('Response status:', response.status);
+      // Use pagination for better performance
+      const page = pagination.currentPage;
+      const limit = pagination.itemsPerPage;
+      
+      // Build API URL with filters
+      let apiUrl = `http://localhost:5002/api/area_mapping?page=${page}&limit=${limit}`;
+      
+      // Add master filters to API call
+      if (memoizedMasterFilters) {
+        if (memoizedMasterFilters.parliament) {
+          apiUrl += `&parliament=${encodeURIComponent(memoizedMasterFilters.parliament)}`;
+        }
+        if (memoizedMasterFilters.assembly) {
+          apiUrl += `&assembly=${encodeURIComponent(memoizedMasterFilters.assembly)}`;
+        }
+        if (memoizedMasterFilters.district) {
+          apiUrl += `&district=${encodeURIComponent(memoizedMasterFilters.district)}`;
+        }
+        if (memoizedMasterFilters.block) {
+          apiUrl += `&block=${encodeURIComponent(memoizedMasterFilters.block)}`;
+        }
+      }
+      
+      // Add detailed filters to API call
+      if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
+        Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
+          if (value && value !== '') {
+            apiUrl += `&${key}=${encodeURIComponent(String(value))}`;
+          }
+        });
+      }
+      
+      console.log('🔍 Fetching data with filters:', { masterFilters: memoizedMasterFilters, detailedFilters: memoizedDetailedFilters, apiUrl });
+      
+      // Log the actual request being made
+      console.log('🌐 Making API request to:', apiUrl);
+      
+      const response = await fetch(apiUrl);
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ HTTP Error Response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
       
       const rawData = await response.text();
-      console.log('Raw response data:', rawData);
       
       try {
         const apiData = JSON.parse(rawData);
-        console.log('Parsed API data:', apiData);
         
         if (!Array.isArray(apiData)) {
+          console.error('❌ API data is not an array:', apiData);
           throw new Error('API data is not an array');
         }
         
-        // Map API data to Voter interface (like DivisionDataTable does)
+        // Map API data to Voter interface (correct mapping for area_mapping API)
         const mappedData: Voter[] = apiData.map((item: any, index: number) => ({
-          id: String(item.DIVISION_ID ?? index + 1),
+          id: String(item.id ?? index + 1),
           row_pk: typeof item.id === 'number' ? item.id : undefined,
-          division_id: String(item.DIVISION_ID ?? ''),
-          name: item.DIVISION_ENG || '',
-            fname: item.DISTRICT_ENG || '',
-            mname: item.PC_ENG || '',
-            surname: item.AC_ENG || '',
-            mobile1: item.PC_CODE || '',
-            mobile2: item.AC_CODE || '',
-            age: item.AC_TOTAL_MANDAL || '',
-            date_of_birth: item.PC_SEAT || '',
-            parliament: item.PC_ENG || '',
-            assembly: item.AC_ENG || '',
-            district: item.DISTRICT_ENG || '',
-            block: item.INC_Party_Zila || '',
-            tehsil: item.BJP_Party_Zila2 || '',
-            village: item.DIVISION_CODE || '',
-            cast_id: item.DISTRICT_CODE || '',
-            cast_ida: item.AC_TOTAL_MANDAL || ''
-          }));
-        
-        console.log('Mapped data:', mappedData);
-        setData(mappedData);
-        
-        // Update pagination
-        setPagination(prev => ({
-          ...prev,
-          totalItems: mappedData.length,
-          totalPages: Math.ceil(mappedData.length / prev.itemsPerPage)
+          division_id: String(item.temp_family_Id || item.temp_family_id || ''),
+          name: item.name || '',
+          fname: item.father_name || '',
+          mname: item.mother_name || '',
+          surname: (() => {
+            const name = item.name || '';
+            const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
+            return nameParts.length > 1 ? nameParts.pop() : '';  // ✅ Only show surname if multiple words
+          })(),
+          mobile1: item.mobile_number ? String(item.mobile_number) : '',
+          mobile2: '',
+          age: '', // Calculate age from date_of_birth if needed
+          date_of_birth: item.date_of_birth || '',
+          parliament: '', // Not available in area_mapping
+          assembly: '', // Not available in area_mapping
+          district: item.district || '',
+          block: item.block || '',
+          tehsil: '',
+          village: item.village || '',
+          cast_id: item.caste || '',
+          cast_ida: item.caste_category || ''
         }));
         
-        console.log('Data set successfully, length:', mappedData.length);
+        setData(mappedData);
+        
+        // Try to get total count from API response headers or check if we have more data
+        let totalCount: number | string = mappedData.length;
+        let totalPages = 1;
+        
+        // If we got exactly the limit, there might be more data
+        if (mappedData.length === limit) {
+          // Try to fetch one more record to see if there's more data
+          try {
+            const nextPageResponse = await fetch(`${apiUrl}&page=${page + 1}&limit=1`);
+            if (nextPageResponse.ok) {
+              const nextPageData = await nextPageResponse.json();
+              if (Array.isArray(nextPageData) && nextPageData.length > 0) {
+                // There's more data, estimate total
+                totalCount = '10000+'; // Show approximate total
+                totalPages = Math.ceil(10000 / limit);
+              } else {
+                // No more data, this is the last page
+                totalCount = (page - 1) * limit + mappedData.length;
+                totalPages = page;
+              }
+            }
+          } catch (error) {
+            // If we can't check next page, assume there's more data
+            totalCount = '10000+';
+            totalPages = Math.ceil(10000 / limit);
+          }
+        } else {
+          // We got less than the limit, so this is the last page
+          totalCount = (page - 1) * limit + mappedData.length;
+          totalPages = page;
+        }
+        
+        setPagination(prev => ({
+          ...prev,
+          totalItems: totalCount,
+          totalPages: totalPages
+        }));
       } catch (parseError) {
-        console.error('JSON parsing error:', parseError);
+        console.error('❌ JSON parsing error:', parseError);
         const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parsing error';
         throw new Error(`Failed to parse API response: ${errorMessage}`);
       }
       
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('❌ Error fetching data:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setError(`Failed to fetch data: ${errorMessage}`);
       setData([]);
       setLoading(false);
     }
-  }, []); // FIXED: Remove dependencies to prevent infinite loops
+  }, [pagination.currentPage, pagination.itemsPerPage]); // FIXED: Add pagination dependencies
 
   // FIXED: Stable memoization to prevent blinking
   const memoizedData = useMemo(() => data || [], [data]); // Depend on data to ensure updates are reflected
@@ -480,6 +635,9 @@ function DataTable({
   // Track successful updates to refresh data
   const [lastUpdateTime, setLastUpdateTime] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Copy blink effect state
+  const [isCopyBlinking, setIsCopyBlinking] = useState(false);
   
   const tableRef = useRef<HTMLDivElement>(null);
   const previousMasterFiltersRef = useRef<typeof masterFilters | undefined>(undefined);
@@ -544,23 +702,292 @@ function DataTable({
     return count > 0 ? { sum, count, average: sum / count } : null;
   }, [selectedCells, memoizedData]);
 
-  // Pagination handlers
-  const handlePageChange = useCallback((page: number) => {
+  // Pagination handlers - handlePageChange function
+  const handlePageChange = useCallback(async (page: number) => {
+    if (page < 1 || page > pagination.totalPages) return;
+    
+    // Update pagination state
     setPagination(prev => ({ ...prev, currentPage: page }));
+    
     // Reset to first cell of new page
     setSelectedCell({ row: 0, column: columnIds[0] });
     setFocusedCell({ row: 0, column: columnIds[0] });
-  }, [columnIds]);
+    
+    // Fetch data for the new page
+    try {
+      setLoading(true);
+      const limit = pagination.itemsPerPage;
+      
+      // Build API URL with filters
+      let apiUrl = `http://localhost:5002/api/area_mapping?page=${page}&limit=${limit}`;
+      
+      // Add master filters to API call
+      if (memoizedMasterFilters) {
+        if (memoizedMasterFilters.parliament) {
+          apiUrl += `&parliament=${encodeURIComponent(memoizedMasterFilters.parliament)}`;
+        }
+        if (memoizedMasterFilters.assembly) {
+          apiUrl += `&assembly=${encodeURIComponent(memoizedMasterFilters.assembly)}`;
+        }
+        if (memoizedMasterFilters.district) {
+          apiUrl += `&district=${encodeURIComponent(memoizedMasterFilters.district)}`;
+        }
+        if (memoizedMasterFilters.block) {
+          apiUrl += `&block=${encodeURIComponent(memoizedMasterFilters.block)}`;
+        }
+      }
+      
+      // Add detailed filters to API call
+      if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
+        Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
+          if (value && value !== '') {
+            apiUrl += `&${key}=${encodeURIComponent(String(value))}`;
+          }
+        });
+      }
+      
+      console.log('🔍 Fetching page data with filters:', { page, masterFilters: memoizedMasterFilters, detailedFilters: memoizedDetailedFilters, apiUrl });
+      
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ HTTP Error Response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      }
+      
+      const rawData = await response.text();
+      
+      try {
+        const apiData = JSON.parse(rawData);
+        
+        if (!Array.isArray(apiData)) {
+          console.error('❌ API data is not an array:', apiData);
+          throw new Error('API data is not an array');
+        }
+        
+        // Map API data to Voter interface
+        const mappedData: Voter[] = apiData.map((item: any, index: number) => ({
+          id: String(item.id ?? index + 1),
+          row_pk: typeof item.id === 'number' ? item.id : undefined,
+          division_id: String(item.temp_family_Id ?? item.id ?? ''),
+          name: item.name || '',
+          fname: item.father_name || '',
+          mname: item.mother_name || '',
+          surname: (() => {
+            const name = item.name || '';
+            const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
+            return nameParts.length > 1 ? nameParts.pop() : '';  // ✅ Only show surname if multiple words
+          })(),
+          mobile1: item.mobile_number ? String(item.mobile_number) : '',
+          mobile2: '',
+          age: '', // Calculate age from date_of_birth if needed
+          date_of_birth: item.date_of_birth || '',
+          parliament: '', // Not available in area_mapping
+          assembly: '', // Not available in area_mapping
+          district: item.district || '',
+          block: item.block || '',
+          tehsil: '',
+          village: item.village || '',
+          cast_id: item.caste || '',
+          cast_ida: item.caste_category || ''
+        }));
+        
+        setData(mappedData);
+        
+        // Update pagination info
+        let totalCount: number | string = mappedData.length;
+        let totalPages = 1;
+        
+        // If we got exactly the limit, there might be more data
+        if (mappedData.length === limit) {
+          // Try to fetch one more record to see if there's more data
+          try {
+            const nextPageResponse = await fetch(`${apiUrl}&page=${page + 1}&limit=1`);
+            if (nextPageResponse.ok) {
+              const nextPageData = await nextPageResponse.json();
+              if (Array.isArray(nextPageData) && nextPageData.length > 0) {
+                // There's more data, estimate total
+                totalCount = '10000+'; // Show approximate total
+                totalPages = Math.ceil(10000 / limit);
+              } else {
+                // No more data, this is the last page
+                totalCount = (page - 1) * limit + mappedData.length;
+                totalPages = page;
+              }
+            }
+          } catch (error) {
+            // If we can't check next page, assume there's more data
+            totalCount = '10000+';
+            totalPages = Math.ceil(10000 / limit);
+          }
+        } else {
+          // We got less than the limit, so this is the last page
+          totalCount = (page - 1) * limit + mappedData.length;
+          totalPages = page;
+        }
+        
+        setPagination(prev => ({
+          ...prev,
+          totalItems: totalCount,
+          totalPages: totalPages
+        }));
+        
+      } catch (parseError) {
+        console.error('❌ JSON parsing error:', parseError);
+        const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parsing error';
+        throw new Error(`Failed to parse API response: ${errorMessage}`);
+      }
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('❌ Error fetching data for page:', page, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setError(`Failed to fetch data for page ${page}: ${errorMessage}`);
+      setLoading(false);
+    }
+  }, [columnIds, pagination.totalPages, pagination.itemsPerPage]);
 
-  const handleItemsPerPageChange = useCallback((newItemsPerPage: number) => {
+  const handleItemsPerPageChange = useCallback(async (newItemsPerPage: number) => {
     setPagination(prev => ({ 
       ...prev, 
       itemsPerPage: newItemsPerPage,
       currentPage: 1 // Reset to first page
     }));
+    
     // Reset to first cell
     setSelectedCell({ row: 0, column: columnIds[0] });
     setFocusedCell({ row: 0, column: columnIds[0] });
+    
+    // Fetch data with new page size
+    try {
+      setLoading(true);
+      
+      // Build API URL with filters
+      let apiUrl = `http://localhost:5002/api/area_mapping?page=1&limit=${newItemsPerPage}`;
+      
+      // Add master filters to API call
+      if (memoizedMasterFilters) {
+        if (memoizedMasterFilters.parliament) {
+          apiUrl += `&parliament=${encodeURIComponent(memoizedMasterFilters.parliament)}`;
+        }
+        if (memoizedMasterFilters.assembly) {
+          apiUrl += `&assembly=${encodeURIComponent(memoizedMasterFilters.assembly)}`;
+        }
+        if (memoizedMasterFilters.block) {
+          apiUrl += `&block=${encodeURIComponent(memoizedMasterFilters.block)}`;
+        }
+      }
+      
+      // Add detailed filters to API call
+      if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
+        Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
+          if (value && value !== '') {
+            apiUrl += `&${key}=${encodeURIComponent(String(value))}`;
+          }
+        });
+      }
+      
+      console.log('🔍 Fetching data with new page size and filters:', { newItemsPerPage, masterFilters: memoizedMasterFilters, detailedFilters: memoizedDetailedFilters, apiUrl });
+      
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ HTTP Error Response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      }
+      
+      const rawData = await response.text();
+      
+      try {
+        const apiData = JSON.parse(rawData);
+        
+        if (!Array.isArray(apiData)) {
+          console.error('❌ API data is not an array:', apiData);
+          throw new Error('API data is not an array');
+        }
+        
+        // Map API data to Voter interface
+        const mappedData: Voter[] = apiData.map((item: any, index: number) => ({
+          id: String(item.id ?? index + 1),
+          row_pk: typeof item.id === 'number' ? item.id : undefined,
+          division_id: String(item.temp_family_Id ?? item.id ?? ''),
+          name: item.name || '',
+          fname: item.father_name || '',
+          mname: item.mother_name || '',
+          surname: (() => {
+            const name = item.name || '';
+            const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
+            return nameParts.length > 1 ? nameParts.pop() : '';  // ✅ Only show surname if multiple words
+          })(),
+          mobile1: item.mobile_number ? String(item.mobile_number) : '',
+          mobile2: '',
+          age: '', // Calculate age from date_of_birth if needed
+          date_of_birth: item.date_of_birth || '',
+          parliament: '', // Not available in area_mapping
+          assembly: '', // Not available in area_mapping
+          district: item.district || '',
+          block: item.block || '',
+          tehsil: '',
+          village: item.village || '',
+          cast_id: item.caste || '',
+          cast_ida: item.caste_category || ''
+        }));
+        
+        setData(mappedData);
+        
+        // Update pagination info
+        let totalCount: number | string = mappedData.length;
+        let totalPages = 1;
+        
+        // If we got exactly the limit, there might be more data
+        if (mappedData.length === newItemsPerPage) {
+          // Try to fetch one more record to see if there's more data
+          try {
+            const nextPageResponse = await fetch(`http://localhost:5002/api/area_mapping?page=2&limit=1`);
+            if (nextPageResponse.ok) {
+              const nextPageData = await nextPageResponse.json();
+              if (Array.isArray(nextPageData) && nextPageData.length > 0) {
+                // There's more data, estimate total
+                totalCount = '10000+'; // Show approximate total
+                totalPages = Math.ceil(10000 / newItemsPerPage);
+              } else {
+                // No more data, this is the last page
+                totalCount = mappedData.length;
+                totalPages = 1;
+              }
+            }
+          } catch (error) {
+            // If we can't check next page, assume there's more data
+            totalCount = '10000+';
+            totalPages = Math.ceil(10000 / newItemsPerPage);
+          }
+        } else {
+          // We got less than the limit, so this is the last page
+          totalCount = mappedData.length;
+          totalPages = 1;
+        }
+        
+        setPagination(prev => ({
+          ...prev,
+          totalItems: totalCount,
+          totalPages: totalPages
+        }));
+        
+      } catch (parseError) {
+        console.error('❌ JSON parsing error:', parseError);
+        const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parsing error';
+        throw new Error(`Failed to parse API response: ${errorMessage}`);
+      }
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('❌ Error fetching data with new page size:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setError(`Failed to fetch data with new page size: ${errorMessage}`);
+      setLoading(false);
+    }
   }, [columnIds]);
 
   // Effect to fetch data on component mount
@@ -569,60 +996,125 @@ function DataTable({
     const initialFetch = async () => {
       try {
         setLoading(true);
-        console.log('Initial data fetch...');
         
-        const response = await fetch('http://localhost:5002/api/div_dist_pc_ac');
-        console.log('Response status:', response.status);
+        // Use pagination for better performance
+        const page = 1;
+        const limit = pagination.itemsPerPage;
+        
+        // Build API URL with filters
+        let apiUrl = `http://localhost:5002/api/area_mapping?page=${page}&limit=${limit}`;
+        
+        // Add master filters to API call
+        if (memoizedMasterFilters) {
+          if (memoizedMasterFilters.parliament) {
+            apiUrl += `&parliament=${encodeURIComponent(memoizedMasterFilters.parliament)}`;
+          }
+          if (memoizedMasterFilters.assembly) {
+            apiUrl += `&assembly=${encodeURIComponent(memoizedMasterFilters.assembly)}`;
+          }
+          if (memoizedMasterFilters.district) {
+            apiUrl += `&district=${encodeURIComponent(memoizedMasterFilters.district)}`;
+          }
+          if (memoizedMasterFilters.block) {
+            apiUrl += `&block=${encodeURIComponent(memoizedMasterFilters.block)}`;
+          }
+        }
+        
+        // Add detailed filters to API call
+        if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
+          Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
+            if (value && value !== '') {
+              apiUrl += `&${key}=${encodeURIComponent(String(value))}`;
+            }
+          });
+        }
+        
+        console.log('🔍 Initial fetch with filters:', { masterFilters: memoizedMasterFilters, detailedFilters: memoizedDetailedFilters, apiUrl });
+        
+        const response = await fetch(apiUrl);
         
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const errorText = await response.text();
+          console.error('❌ Initial fetch HTTP Error Response:', errorText);
+          throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
         }
         
         const rawData = await response.text();
-        console.log('Raw response data:', rawData);
         
         try {
           const apiData = JSON.parse(rawData);
-          console.log('Initial data received:', apiData);
           
           if (!Array.isArray(apiData)) {
             throw new Error('API data is not an array');
           }
           
-          // Map API data to Voter interface (like DivisionDataTable does)
-          const mappedData: Voter[] = apiData.map((item: any, index: number) => ({
-            id: String(item.DIVISION_ID ?? index + 1),
-            row_pk: typeof item.id === 'number' ? item.id : undefined,
-            division_id: String(item.DIVISION_ID ?? ''),
-            name: item.DIVISION_ENG || '',
-            fname: item.DISTRICT_ENG || '',
-            mname: item.PC_ENG || '',
-            surname: item.AC_ENG || '',
-            mobile1: item.PC_CODE || '',
-            mobile2: item.AC_CODE || '',
-            age: item.AC_TOTAL_MANDAL || '',
-            date_of_birth: item.PC_SEAT || '',
-            parliament: item.PC_ENG || '',
-            assembly: item.AC_ENG || '',
-            district: item.DISTRICT_ENG || '',
-            block: item.INC_Party_Zila || '',
-            tehsil: item.BJP_Party_Zila2 || '',
-            village: item.DIVISION_CODE || '',
-            cast_id: item.DISTRICT_CODE || '',
-            cast_ida: item.AC_TOTAL_MANDAL || ''
+                  // Map API data to Voter interface (correct mapping for area_mapping API) - FIRST INSTANCE
+        const mappedData: Voter[] = apiData.map((item: any, index: number) => ({
+          id: String(item.id ?? index + 1),
+          row_pk: typeof item.id === 'number' ? item.id : undefined,
+          division_id: String(item.temp_family_Id || item.temp_family_id || ''),
+            name: item.name || '',
+            fname: item.father_name || '',
+            mname: item.mother_name || '',
+            surname: (() => {
+              const name = item.name || '';
+              const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
+              return nameParts.length > 1 ? nameParts.pop() : '';  // ✅ Only show surname if multiple words
+            })(),
+            mobile1: item.mobile_number ? String(item.mobile_number) : '',
+            mobile2: '',
+            age: calculateAge(item.date_of_birth),
+            date_of_birth: item.date_of_birth || '',
+            parliament: '', // Not available in area_mapping
+            assembly: '', // Not available in area_mapping
+            district: item.district || '',
+            block: item.block || '',
+            tehsil: item.gp || '',
+            village: item.village || '',
+            cast_id: item.caste || '',
+            cast_ida: item.caste_category || ''
           }));
           
-          console.log('Initial mapped data:', mappedData);
           setData(mappedData);
           
-          // Update pagination
+          // Try to get total count from API response headers or check if we have more data
+          let totalCount: number | string = mappedData.length;
+          let totalPages = 1;
+          
+          // If we got exactly the limit, there might be more data
+          if (mappedData.length === pagination.itemsPerPage) {
+            // Try to fetch one more record to see if there's more data
+            try {
+              const nextPageResponse = await fetch(`http://localhost:5002/api/area_mapping?page=2&limit=1`);
+              if (nextPageResponse.ok) {
+                const nextPageData = await nextPageResponse.json();
+                if (Array.isArray(nextPageData) && nextPageData.length > 0) {
+                  // There's more data, estimate total
+                  totalCount = '10000+'; // Show approximate total
+                  totalPages = Math.ceil(10000 / pagination.itemsPerPage);
+                } else {
+                  // No more data, this is the last page
+                  totalCount = mappedData.length;
+                  totalPages = 1;
+                }
+              }
+            } catch (error) {
+              // If we can't check next page, assume there's more data
+              totalCount = '10000+';
+              totalPages = Math.ceil(10000 / pagination.itemsPerPage);
+            }
+          } else {
+            // We got less than the limit, so this is the last page
+            totalCount = mappedData.length;
+            totalPages = 1;
+          }
+          
           setPagination(prev => ({
             ...prev,
-            totalItems: mappedData.length,
-            totalPages: Math.ceil(mappedData.length / prev.itemsPerPage)
+            totalItems: totalCount,
+            totalPages: totalPages
           }));
           
-          console.log('Initial data set successfully, length:', mappedData.length);
         } catch (parseError) {
           console.error('JSON parsing error:', parseError);
           const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parsing error';
@@ -640,20 +1132,34 @@ function DataTable({
     };
     
     initialFetch();
-  }, []);
+  }, [pagination.itemsPerPage, memoizedMasterFilters, memoizedDetailedFilters]);
 
   // FIXED: Simplified filter effect to prevent blinking
   useEffect(() => {
     // Only refetch if we already have data and filters actually changed
     if (data.length > 0 && memoizedMasterFilters && Object.keys(memoizedMasterFilters).length > 0) {
       const timeoutId = setTimeout(() => {
-        console.log('Filters changed, refetching division data');
-        fetchDivisionData();
+        // Reset to first page when filters change
+        handlePageChange(1);
       }, 500); // Increased delay to prevent rapid calls
       
       return () => clearTimeout(timeoutId);
     }
-  }, [memoizedMasterFilters, data.length, fetchDivisionData]);
+  }, [memoizedMasterFilters, data.length, handlePageChange]);
+
+  // Effect to refetch data when detailed filters change
+  useEffect(() => {
+    // Only refetch if we already have data and detailed filters actually changed
+    if (data.length > 0 && memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
+      const timeoutId = setTimeout(() => {
+        console.log('🔍 Detailed filters changed, refetching data:', memoizedDetailedFilters);
+        // Reset to first page when detailed filters change
+        handlePageChange(1);
+      }, 500); // Increased delay to prevent rapid calls
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [memoizedDetailedFilters, data.length, handlePageChange]);
 
   // Effect to refresh data after successful updates to ensure backend sync
   // DISABLED: User prefers no automatic refresh, only immediate cell updates
@@ -685,8 +1191,6 @@ function DataTable({
         // console.log(`Cannot update row ${rowIndex} - no data available`);
         return;
       }
-
-      console.log(`Saving ${columnId} = "${value}" for voter ${voter.id} at row ${rowIndex}`);
       
       // Determine primary key for update: prefer DB primary key 'id', fallback to DIVISION_ID
       const recordId = (voter.row_pk != null ? String(voter.row_pk) : (voter.division_id || '')).trim();
@@ -696,25 +1200,25 @@ function DataTable({
         return;
       }
       
-      // Map frontend column IDs to backend column names
+      // Map frontend column IDs to backend column names for area_mapping API
       const columnMapping: { [key: string]: string } = {
-        'id': 'DIVISION_ID',
-        'name': 'DIVISION_ENG',
-        'fname': 'DISTRICT_ENG',
-        'mname': 'PC_ENG',
-        'surname': 'AC_ENG',
-        'mobile1': 'PC_CODE',
-        'mobile2': 'AC_CODE',
-        'age': 'AC_TOTAL_MANDAL',
-        'date_of_birth': 'PC_SEAT',
-        'parliament': 'PC_ENG',
-        'assembly': 'AC_ENG',
-        'district': 'DISTRICT_ENG',
-        'block': 'INC_Party_Zila',
-        'tehsil': 'BJP_Party_Zila2',
-        'village': 'DIVISION_CODE',
-        'cast_id': 'DISTRICT_CODE',
-        'cast_ida': 'AC_TOTAL_MANDAL'
+        'id': 'id',
+        'name': 'name',
+        'fname': 'father_name',
+        'mname': 'mother_name',
+        'surname': 'caste',
+        'mobile1': 'mobile_number',
+        'mobile2': 'mobile_number',
+        'age': 'date_of_birth', // Age is calculated from date_of_birth
+        'date_of_birth': 'date_of_birth',
+        'parliament': 'district', // Map to available field
+        'assembly': 'block', // Map to available field
+        'district': 'district',
+        'block': 'block',
+        'tehsil': 'gp',
+        'village': 'village',
+        'cast_id': 'caste',
+        'cast_ida': 'caste_category'
       };
       
       const backendColumnName = columnMapping[columnId];
@@ -724,16 +1228,7 @@ function DataTable({
       }
       
       // Call the backend API to update the data
-      console.log('🔧 Sending update request to backend:', {
-        url: `http://localhost:5002/api/div_dist_pc_ac/${recordId}`,
-        method: 'PUT',
-        body: {
-          columnName: backendColumnName,
-          value: value
-        }
-      });
-      
-      const response = await fetch(`http://localhost:5002/api/div_dist_pc_ac/${recordId}`, {
+      const response = await fetch(`http://localhost:5002/api/area_mapping/${recordId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -744,8 +1239,6 @@ function DataTable({
         }),
       });
       
-      console.log('🔧 Backend response status:', response.status);
-      
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ Backend error response:', errorText);
@@ -753,17 +1246,23 @@ function DataTable({
       }
       
       const result = await response.json();
-      console.log(`✅ Successfully updated ${columnId} for voter ${voter.id}:`, result);
       
       // Update the local state to reflect the change immediately
-      console.log('🔄 Updating frontend data...');
       setData(prevData => {
-        const newData = prevData.map((item, index) => 
-          index === rowIndex 
-            ? { ...item, [columnId]: value }
-            : item
-        );
-        console.log('✅ Frontend data updated:', newData[rowIndex]);
+        const newData = prevData.map((item, index) => {
+          if (index === rowIndex) {
+            const updatedItem = { ...item, [columnId]: value };
+            
+            // Special handling: If we're updating the name, also update the surname column
+            if (columnId === 'name') {
+              const nameParts = value.split(' ').filter((part: string) => part.trim() !== '');
+              updatedItem.surname = nameParts.length > 1 ? nameParts.pop() : '';
+            }
+            
+            return updatedItem;
+          }
+          return item;
+        });
         return newData;
       });
       
@@ -796,14 +1295,10 @@ function DataTable({
 
   // Consolidated navigation function to prevent conflicts
   const navigateToCell = useCallback((fromRow: number, fromColumnId: string, toRow: number, toColumnId: string) => {
-    console.log(`🎯 Navigation: [${fromRow}, ${fromColumnId}] → [${toRow}, ${toColumnId}]`);
-    console.log(`📍 Column IDs:`, columnIds);
-    console.log(`📍 From index:`, columnIds.indexOf(fromColumnId), `To index:`, columnIds.indexOf(toColumnId));
-    
     // Immediate state updates for instant response
     setSelectedCell({ row: toRow, column: toColumnId });
     setFocusedCell({ row: toRow, column: toColumnId });
-  }, [columnIds]);
+  }, []);
 
   const handleUpdateAndNavigate = useCallback(async (rowIndex: number, columnId: string, value: any, navigationKey: string) => {
     try {
@@ -844,13 +1339,10 @@ function DataTable({
       
       if (newRow !== rowIndex || newCol !== currentColumnIndex) {
         const newColumnId = columnIds[newCol];
-        console.log(`🔄 UpdateAndNavigate: ${columnId}[${currentColumnIndex}] → ${newColumnId}[${newCol}] | Row: ${rowIndex} → ${newRow}`);
         
         // Validate that the target cell exists
         if (newColumnId && newRow >= 0 && newRow < maxRows && newCol >= 0 && newCol < maxCols) {
           navigateToCell(rowIndex, columnId, newRow, newColumnId);
-        } else {
-          console.error(`❌ Invalid navigation target in UpdateAndNavigate: [${newRow}, ${newCol}] - maxRows: ${maxRows}, maxCols: ${maxCols}`);
         }
       }
     } catch (error) {
@@ -874,20 +1366,17 @@ function DataTable({
       setSelectedCells(prev => new Set([...prev, clickedCellKey]));
       setSelectedCell({ row: rowIndex, column: columnId });
       setFocusedCell({ row: rowIndex, column: columnId });
-      console.log(`🔄 Shift+Click: Added cell [${rowIndex}, ${columnId}] to selection`);
     } else if (event.ctrlKey || event.metaKey) {
       // Ctrl/Cmd+Click: Add to existing selection (individual cell selection)
       const clickedCellKey = `${rowIndex}-${columnId}`;
       setSelectedCells(prev => new Set([...prev, clickedCellKey]));
       setSelectedCell({ row: rowIndex, column: columnId });
       setFocusedCell({ row: rowIndex, column: columnId });
-      console.log(`🔄 Ctrl+Click: Added cell [${rowIndex}, ${columnId}] to selection`);
     } else {
       // Normal click: Clear previous selection and select new cell
       setSelectedCells(new Set([`${rowIndex}-${columnId}`]));
       setSelectedCell({ row: rowIndex, column: columnId });
       setFocusedCell({ row: rowIndex, column: columnId });
-      console.log(`🔄 Normal Click: Selected cell [${rowIndex}, ${columnId}]`);
     }
     
     if (editingCell) {
@@ -901,7 +1390,6 @@ function DataTable({
     
     // Allow editing even for empty cells - get current value or empty string
     const currentValue = (memoizedData && memoizedData[rowIndex]) ? (memoizedData[rowIndex]?.[columnId as keyof Voter] || '') : '';
-    console.log(`Starting edit via double-click - rowIndex: ${rowIndex}, columnId: ${columnId}, currentValue: "${currentValue}"`);
     setEditValue(String(currentValue));
     setEditingCell({ row: rowIndex, column: columnId });
     setSelectedCell({ row: rowIndex, column: columnId });
@@ -914,24 +1402,7 @@ function DataTable({
     const currentColumnIndex = columnIds.indexOf(columnId);
     const { maxRows, maxCols } = gridDimensions;
     
-    // Debug logging to identify the issue
-    console.log(`🔍 Navigation Debug:`, {
-      key: e.key,
-      columnId,
-      currentColumnIndex,
-      columnIds: columnIds.join(', '),
-      maxCols,
-      maxRows
-    });
     
-    // Additional debug for column ID matching
-    console.log(`🔍 Column ID Debug:`, {
-      columnId,
-      columnIdType: typeof columnId,
-      columnIdsArray: columnIds,
-      foundIndex: currentColumnIndex,
-      isValidIndex: currentColumnIndex >= 0
-    });
     
     let newRow = rowIndex;
     let newCol = currentColumnIndex;
@@ -939,22 +1410,18 @@ function DataTable({
     switch (e.key) {
       case 'ArrowUp':
         newRow = Math.max(0, rowIndex - 1);
-        console.log(`🔄 ArrowUp: Moving up from row ${rowIndex} to ${newRow}`);
         e.preventDefault();
         break;
       case 'ArrowDown':
         newRow = Math.min(maxRows - 1, rowIndex + 1);
-        console.log(`🔄 ArrowDown: Moving down from row ${rowIndex} to ${newRow}`);
         e.preventDefault();
         break;
       case 'ArrowLeft':
         newCol = Math.max(0, currentColumnIndex - 1);
-        console.log(`🔄 ArrowLeft: Moving left from column ${currentColumnIndex} to ${newCol}`);
         e.preventDefault();
         break;
       case 'ArrowRight':
         newCol = Math.min(maxCols - 1, currentColumnIndex + 1);
-        console.log(`🔄 ArrowRight: Moving right from column ${currentColumnIndex} to ${newCol}`);
         e.preventDefault();
         break;
       case 'Tab':
@@ -962,21 +1429,17 @@ function DataTable({
           // Shift+Tab: Move to previous cell
           if (currentColumnIndex > 0) {
             newCol = currentColumnIndex - 1;
-            console.log(`🔄 Shift+Tab: Moving left from column ${currentColumnIndex} to ${newCol}`);
           } else if (rowIndex > 0) {
             newCol = maxCols - 1;
             newRow = rowIndex - 1;
-            console.log(`🔄 Shift+Tab: Moving up-left from [${rowIndex}, ${currentColumnIndex}] to [${newRow}, ${newCol}]`);
           }
         } else {
           // Tab: Move to next cell
           if (currentColumnIndex < maxCols - 1) {
             newCol = currentColumnIndex + 1;
-            console.log(`🔄 Tab: Moving right from column ${currentColumnIndex} to ${newCol}`);
           } else if (rowIndex < maxRows - 1) {
             newCol = 0;
             newRow = rowIndex + 1;
-            console.log(`🔄 Tab: Moving down-right from [${rowIndex}, ${currentColumnIndex}] to [${newRow}, ${newCol}]`);
           }
         }
         e.preventDefault();
@@ -984,7 +1447,6 @@ function DataTable({
         break;
       case 'Enter':
         // SIMPLE: Enter key ONLY moves down, never edits
-        console.log(`✅ ENTER KEY: Moving down from row ${rowIndex} to row ${Math.min(maxRows - 1, rowIndex + 1)}`);
         newRow = Math.min(maxRows - 1, rowIndex + 1);
         e.preventDefault();
         e.stopPropagation();
@@ -993,19 +1455,6 @@ function DataTable({
         if (columnId !== 'select') {
           // Allow editing even for empty cells - get current value or empty string
           const currentValue = (memoizedData && memoizedData[rowIndex]) ? (memoizedData[rowIndex]?.[columnId as keyof Voter] || '') : '';
-          console.log(`Starting edit via F2 key - rowIndex: ${rowIndex}, columnId: ${columnId}, currentValue: "${currentValue}"`);
-          setEditValue(String(currentValue));
-          setEditingCell({ row: rowIndex, column: columnId });
-          setSelectedCell({ row: rowIndex, column: columnId });
-          setFocusedCell({ row: rowIndex, column: columnId });
-        }
-        e.preventDefault();
-        break;
-      case 'F2':
-        if (columnId !== 'select') {
-          // Allow editing even for empty cells - get current value or empty string
-          const currentValue = (memoizedData && memoizedData[rowIndex]) ? (memoizedData[rowIndex]?.[columnId as keyof Voter] || '') : '';
-          console.log(`Starting edit via F2 key - rowIndex: ${rowIndex}, columnId: ${columnId}, currentValue: "${currentValue}"`);
           setEditValue(String(currentValue));
           setEditingCell({ row: rowIndex, column: columnId });
           setSelectedCell({ row: rowIndex, column: columnId });
@@ -1017,7 +1466,6 @@ function DataTable({
         // Clear selection range and keep only the current cell selected
         if (selectionRange) {
           setSelectionRange(null);
-          console.log(`🔄 Escape: Cleared selection range`);
         }
         e.preventDefault();
         break;
@@ -1028,7 +1476,6 @@ function DataTable({
             start: { row: 0, column: columnIds[0] },
             end: { row: Math.max(0, (memoizedData?.length || 1) - 1), column: columnIds[columnIds.length - 1] }
           });
-          console.log(`🔄 Ctrl+A: Selected all cells`);
           e.preventDefault();
           e.stopPropagation();
         }
@@ -1045,16 +1492,7 @@ function DataTable({
             
             let csvData = '';
             
-            // Add headers
-            for (let col = startColIndex; col <= endColIndex; col++) {
-              const columnId = columnIds[col];
-              if (columnId) {
-                csvData += (col > startColIndex ? '\t' : '') + columnId;
-              }
-            }
-            csvData += '\n';
-            
-            // Add data rows
+            // Add data rows ONLY (no headers)
             for (let row = startRow; row <= endRow; row++) {
               for (let col = startColIndex; col <= endColIndex; col++) {
                 const columnId = columnIds[col];
@@ -1066,9 +1504,7 @@ function DataTable({
               csvData += '\n';
             }
             
-            navigator.clipboard.writeText(csvData).then(() => {
-              console.log(`🔄 Ctrl+C: Copied ${getSelectedCellsCount()} cells to clipboard`);
-            }).catch(err => {
+            navigator.clipboard.writeText(csvData).catch(err => {
               console.error('Failed to copy to clipboard:', err);
             });
           }
@@ -1084,6 +1520,17 @@ function DataTable({
         e.preventDefault();
         break;
       default:
+        // Direct typing: Any printable character starts editing immediately
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && columnId !== 'select') {
+          setEditValue(e.key);
+          setEditingCell({ row: rowIndex, column: columnId });
+          setSelectedCell({ row: rowIndex, column: columnId });
+          setFocusedCell({ row: rowIndex, column: columnId });
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        
         // Handle Shift + Arrow keys for range selection
         if (e.shiftKey && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
           // Add throttling to prevent rapid selection changes
@@ -1095,14 +1542,7 @@ function DataTable({
           }
           setLastShiftArrowTime(now);
           
-          // Debug: Log the current state
-          console.log(`🔍 Shift+Arrow Debug:`, {
-            rowIndex,
-            columnId,
-            currentColumnIndex,
-            columnIds: columnIds.join(', '),
-            key: e.key
-          });
+
           
           let targetRow = rowIndex;
           let targetCol = currentColumnIndex;
@@ -1122,12 +1562,7 @@ function DataTable({
               break;
           }
           
-          console.log(`🎯 Target calculation:`, {
-            targetRow,
-            targetCol,
-            currentColumnIndex,
-            columnIdsLength: columnIds.length
-          });
+
           
           if (targetRow !== rowIndex || targetCol !== currentColumnIndex) {
             const targetColumnId = columnIds[targetCol];
@@ -1139,9 +1574,6 @@ function DataTable({
               // Update the focused cell
               setSelectedCell({ row: targetRow, column: targetColumnId });
               setFocusedCell({ row: targetRow, column: targetColumnId });
-              console.log(`🔄 Shift+Arrow: Moving from [${rowIndex}, ${columnId}] to [${targetRow}, ${targetColumnId}]`);
-              console.log(`📍 Current column index: ${currentColumnIndex}, Target column index: ${targetCol}`);
-              console.log(`📍 Column IDs: ${columnIds.join(', ')}`);
             }
           }
           e.preventDefault();
@@ -1153,17 +1585,12 @@ function DataTable({
 
     if (newRow !== rowIndex || newCol !== currentColumnIndex) {
       const newColumnId = columnIds[newCol];
-      console.log(`🎯 Navigation Result: ${columnId}[${currentColumnIndex}] → ${newColumnId}[${newCol}] | Row: ${rowIndex} → ${newRow}`);
       
       // Validate that the target cell exists
       if (newColumnId && newRow >= 0 && newRow < maxRows && newCol >= 0 && newCol < maxCols) {
         // Use the consolidated navigation function
         navigateToCell(rowIndex, columnId, newRow, newColumnId);
-      } else {
-        console.error(`❌ Invalid navigation target: [${newRow}, ${newCol}] - maxRows: ${maxRows}, maxCols: ${maxCols}`);
       }
-    } else {
-      console.log(`❌ No navigation occurred - staying at ${columnId}[${currentColumnIndex}]`);
     }
   }, [memoizedData, columnIds, editingCell, handleUpdateData, gridDimensions, navigateToCell, selectedCells]);
 
@@ -1177,16 +1604,12 @@ function DataTable({
     if (selectedCell && !editingCell) {
       const cellSelector = `[data-cell="${selectedCell.row}-${selectedCell.column}"]`;
       const cellElement = document.querySelector(cellSelector) as HTMLElement;
-      console.log(`🔍 Focus Update: Looking for cell ${cellSelector}, found:`, cellElement);
       if (cellElement && cellElement !== document.activeElement) {
         // Add a small delay to ensure DOM is ready
         setTimeout(() => {
           cellElement.focus();
-          console.log(`✅ Focused cell: ${selectedCell.row}-${selectedCell.column}`);
         }, 0);
-      } else if (!cellElement) {
-        console.log(`❌ Cell not found: ${cellSelector}`);
-      }
+              }
     }
   }, [selectedCell?.row, selectedCell?.column, editingCell]);
 
@@ -1198,6 +1621,11 @@ function DataTable({
     }
   }, [memoizedData?.length, selectedCell, loading, columnIds[0]]);
 
+  // Effect to update goToPageInput when current page changes
+  useEffect(() => {
+    setGoToPageInput(pagination.currentPage.toString());
+  }, [pagination.currentPage]);
+
   // Optimized keyboard handler with direct cell reference
   const currentCellRef = useRef<{row: number, column: string} | null>(null);
   
@@ -1207,22 +1635,37 @@ function DataTable({
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Handle global shortcuts that work from anywhere in the table
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key.toLowerCase()) {
-          case 'a':
-            // Ctrl+A: Select all cells
-            e.preventDefault();
-            e.stopPropagation();
-            const allCells = new Set<string>();
-            for (let row = 0; row < (memoizedData?.length || 0); row++) {
-              for (let col = 0; col < columnIds.length; col++) {
-                allCells.add(`${row}-${columnIds[col]}`);
+              // Handle global shortcuts that work from anywhere in the table
+        if (e.ctrlKey || e.metaKey) {
+          switch (e.key.toLowerCase()) {
+            case 'a':
+              // Ctrl+A: Select all cells
+              e.preventDefault();
+              e.stopPropagation();
+              const allCells = new Set<string>();
+              for (let row = 0; row < (memoizedData?.length || 0); row++) {
+                for (let col = 0; col < columnIds.length; col++) {
+                  allCells.add(`${row}-${columnIds[col]}`);
+                }
               }
-            }
-            setSelectedCells(allCells);
-            console.log(`🔄 Global Ctrl+A: Selected ${allCells.size} cells`);
-            return;
+              setSelectedCells(allCells);
+              return;
+              
+            case 'v':
+              // Ctrl+V: Paste into selected cell
+              e.preventDefault();
+              e.stopPropagation();
+              if (selectedCell && selectedCell.column !== 'select') {
+                navigator.clipboard.readText().then((text) => {
+                  setEditValue(text);
+                  setEditingCell({ row: selectedCell.row, column: selectedCell.column });
+                  setSelectedCell({ row: selectedCell.row, column: selectedCell.column });
+                  setFocusedCell({ row: selectedCell.row, column: selectedCell.column });
+                }).catch(err => {
+                  console.error('Failed to read clipboard:', err);
+                });
+              }
+              return;
             
           case 'c':
             // Ctrl+C: Copy selected cells
@@ -1253,13 +1696,7 @@ function DataTable({
               
               let csvData = '';
               
-              // Add headers
-              sortedColumnIds.forEach((columnId, index) => {
-                csvData += (index > 0 ? '\t' : '') + columnId;
-              });
-              csvData += '\n';
-              
-              // Add data rows
+              // Add data rows ONLY (no headers)
               const sortedRows = Array.from(rowsMap.keys()).sort((a, b) => a - b);
               sortedRows.forEach(rowIndex => {
                 const rowData = rowsMap.get(rowIndex)!;
@@ -1271,12 +1708,12 @@ function DataTable({
               });
               
               navigator.clipboard.writeText(csvData).then(() => {
-                console.log(`🔄 Global Ctrl+C: Copied ${getSelectedCellsCount()} cells to clipboard`);
-                // Show a brief success message
-                alert(`✅ Copied ${getSelectedCellsCount()} cells to clipboard!`);
+                // Trigger blinking effect instead of popup
+                triggerCopyBlinkEffect();
               }).catch(err => {
                 console.error('Failed to copy to clipboard:', err);
-                alert('❌ Failed to copy to clipboard');
+                // Trigger blinking effect for error too
+                triggerCopyBlinkEffect();
               });
             } else {
               alert('❌ No cells selected. Please select cells first.');
@@ -1330,9 +1767,6 @@ function DataTable({
               // Update the focused cell
               setSelectedCell({ row: targetRow, column: targetColumnId });
               setFocusedCell({ row: targetRow, column: targetColumnId });
-              console.log(`🔄 Global Shift+Arrow: Moving from [${currentCell.row}, ${currentCell.column}] to [${targetRow}, ${targetColumnId}]`);
-              console.log(`📍 Current column index: ${currentColumnIndex}, Target column index: ${targetCol}`);
-              console.log(`📍 Column IDs: ${columnIds.join(', ')}`);
             }
           }
           return;
@@ -1394,15 +1828,7 @@ function DataTable({
     // FIXED: Show EXACTLY the number of rows as data length - NO EXTRA ROWS
     const totalRows = displayData?.length || 0;
     
-    // Debug logging
-    console.log('🔍 Table Body Debug:', {
-      loading,
-      memoizedDataLength: memoizedData?.length,
-      displayDataLength: displayData?.length,
-      totalRows,
-      displayColumnIds,
-      firstRowData: displayData?.[0]
-    });
+
     
     // FIXED: Use simple map like DivisionDataTable - NO DATA REPETITION
     return displayData.map((rowData, index) => {
@@ -1432,7 +1858,7 @@ function DataTable({
                   isSelected={selectedCell?.row === index && selectedCell?.column === columnId}
                   isFocused={focusedCell?.row === index && focusedCell?.column === columnId}
                   isEditing={editingCell?.row === index && editingCell?.column === columnId}
-                  isInSelectionRange={isCellSelected(index, columnId)}
+                  isInSelectionRange={isCellInSelectionRange(index, columnId)}
                   onCellClick={handleCellClick}
                   onCellDoubleClick={handleCellDoubleClick}
                   onCellKeyDown={handleCellKeyDown}
@@ -1442,6 +1868,7 @@ function DataTable({
                   setEditValue={setEditValue}
                   onStopEditing={handleStopEditing}
                   loading={updatingCells.has(`${index}-${columnId}`)}
+                  isCopyBlinking={isCopyBlinking}
                 />
               )}
             </td>
@@ -1451,30 +1878,81 @@ function DataTable({
     });
   }, [memoizedData, loading, columns, selectedCell?.row, selectedCell?.column, focusedCell?.row, focusedCell?.column, editingCell?.row, editingCell?.column, editValue, columnIds, isCellInSelectionRange, handleCellClick, handleCellDoubleClick, handleCellKeyDown, handleUpdateData, handleUpdateAndNavigate, setEditValue, handleStopEditing]);
 
+  // Function to trigger copy blink effect (Excel-like behavior)
+  const triggerCopyBlinkEffect = () => {
+    setIsCopyBlinking(true);
+    setTimeout(() => {
+      setIsCopyBlinking(false);
+    }, 300); // Blink for 300ms
+  };
+
+  // Function to refresh data with current filters
+  const refreshDataWithFilters = () => {
+    console.log('🔄 Manually refreshing data with current filters');
+    handlePageChange(1); // Go to first page and refetch
+  };
+
   // Function to refresh data
   const fetchDataAgain = () => {
-    fetch('http://localhost:5002/api/div_dist_pc_ac')
+    const page = pagination.currentPage;
+    const limit = pagination.itemsPerPage;
+    
+    // Build API URL with filters
+    let apiUrl = `http://localhost:5002/api/area_mapping?page=${page}&limit=${limit}`;
+    
+    // Add master filters to API call
+    if (memoizedMasterFilters) {
+      if (memoizedMasterFilters.parliament) {
+        apiUrl += `&parliament=${encodeURIComponent(memoizedMasterFilters.parliament)}`;
+      }
+      if (memoizedMasterFilters.assembly) {
+        apiUrl += `&assembly=${encodeURIComponent(memoizedMasterFilters.assembly)}`;
+      }
+      if (memoizedMasterFilters.district) {
+        apiUrl += `&district=${encodeURIComponent(memoizedMasterFilters.district)}`;
+      }
+      if (memoizedMasterFilters.block) {
+        apiUrl += `&block=${encodeURIComponent(memoizedMasterFilters.block)}`;
+      }
+    }
+    
+    // Add detailed filters to API call
+    if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
+      Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
+        if (value && value !== '') {
+          apiUrl += `&${key}=${encodeURIComponent(String(value))}`;
+        }
+      });
+    }
+    
+    console.log('🔍 Refreshing data with filters:', { apiUrl });
+    
+    fetch(apiUrl)
       .then(res => res.json())
       .then((apiData: any[]) => {
         const mappedData: Voter[] = apiData.map((item: any, index: number) => ({
-          id: String(item.DIVISION_ID ?? index + 1),
-          division_id: String(item.DIVISION_ID ?? ''),
-          name: item.DIVISION_ENG || '',
-          fname: item.DISTRICT_ENG || '',
-          mname: item.PC_ENG || '',
-          surname: item.AC_ENG || '',
-          mobile1: item.PC_CODE || '',
-          mobile2: item.AC_CODE || '',
-          age: item.AC_TOTAL_MANDAL || '',
-          date_of_birth: item.PC_SEAT || '',
-          parliament: item.PC_ENG || '',
-          assembly: item.AC_ENG || '',
-          district: item.DISTRICT_ENG || '',
-          block: item.INC_Party_Zila || '',
-          tehsil: item.BJP_Party_Zila2 || '',
-          village: item.DIVISION_CODE || '',
-          cast_id: item.DISTRICT_CODE || '',
-          cast_ida: item.AC_TOTAL_MANDAL || ''
+          id: String(item.id ?? index + 1),
+          division_id: String(item.temp_family_Id || item.temp_family_id || ''),
+          name: item.name || '',
+          fname: item.father_name || '',
+          mname: item.mother_name || '',
+          surname: (() => {
+            const name = item.name || '';
+            const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
+            return nameParts.length > 1 ? nameParts.pop() : '';  // ✅ Only show surname if multiple words
+          })(),
+          mobile1: item.mobile_number ? String(item.mobile_number) : '',
+          mobile2: '',
+          age: calculateAge(item.date_of_birth),
+          date_of_birth: item.date_of_birth || '',
+          parliament: '', // Not available in area_mapping
+          assembly: '', // Not available in area_mapping
+          district: item.district || '',
+          block: item.block || '',
+          tehsil: item.gp || '',
+          village: item.village || '',
+          cast_id: item.caste || '',
+          cast_ida: item.caste_category || ''
         }));
         setData(mappedData);
       })
@@ -1485,26 +1963,49 @@ function DataTable({
 
   // Handle edit function
   const handleEdit = (rowId: number, fieldName: string, newValue: string) => {
-    // Map frontend field names to backend column names
+    // Map frontend field names to backend column names for area_mapping API
     const columnMapping: { [key: string]: string } = {
-      'name': 'DIVISION_ENG',
-      'fname': 'DISTRICT_ENG',
-      'mname': 'PC_ENG',
-      'surname': 'AC_ENG',
-      'district': 'DISTRICT_ENG',
-      'block': 'INC_Party_Zila'
+      'name': 'name',
+      'fname': 'father_name',
+      'mname': 'mother_name',
+      'surname': 'name',  // ✅ CORRECT: Surname updates the name field
+      'district': 'district',
+      'block': 'block',
+      'tehsil': 'gp',
+      'village': 'village',
+      'cast_id': 'caste',
+      'cast_ida': 'caste_category'
     };
     
-    const backendColumnName = columnMapping[fieldName] || fieldName;
+    let backendColumnName = columnMapping[fieldName] || fieldName;
+    let updateValue = newValue;
     
-    fetch(`http://localhost:5002/api/div_dist_pc_ac/${rowId}`, {
+    // Special handling for surname: update the name field by replacing last word
+    if (fieldName === 'surname') {
+      backendColumnName = 'name';
+      // Get current name and replace last word with new surname
+      const currentVoter = memoizedData.find(v => v.id === String(rowId));
+      if (currentVoter && currentVoter.name) {
+        const nameParts = currentVoter.name.split(' ').filter((part: string) => part.trim() !== '');
+        if (nameParts.length > 1) {
+          nameParts.pop(); // Remove last word (old surname)
+          nameParts.push(newValue); // Add new surname
+          updateValue = nameParts.join(' ');
+        } else {
+          // If only one word, append the new surname
+          updateValue = `${currentVoter.name} ${newValue}`;
+        }
+      }
+    }
+    
+    fetch(`http://localhost:5002/api/area_mapping/${rowId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ 
         columnName: backendColumnName,
-        value: newValue 
+        value: updateValue 
       })
     })
     .then(res => {
@@ -1514,8 +2015,29 @@ function DataTable({
       return res.json();
     })
     .then(() => {
-      console.log('✅ Data updated successfully');
-      fetchDataAgain(); // Refresh data
+              // Update local state immediately for immediate UI update
+      setData(prevData => {
+        const newData = prevData.map((item, index) => {
+          if (item.id === String(rowId)) {
+            const updatedItem = { ...item };
+            
+            if (fieldName === 'surname') {
+              // Update both name and surname
+              updatedItem.name = updateValue;
+              updatedItem.surname = newValue;
+            } else {
+              // Update the specific field (using any for dynamic field access)
+              (updatedItem as any)[fieldName] = newValue;
+            }
+            
+            return updatedItem;
+          }
+          return item;
+        });
+        return newData;
+      });
+      
+      // fetchDataAgain(); // Commented out since we're updating locally
     })
     .catch(error => {
       console.error('Error updating data:', error);
@@ -1529,7 +2051,8 @@ function DataTable({
       <div className="bg-white rounded-lg shadow-lg p-8">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <div className="text-gray-600">Loading data...</div>
+          <div className="text-gray-600">Loading data from area_mapping API...</div>
+          <div className="text-sm text-gray-500 mt-2">This may take a few moments for large datasets</div>
         </div>
       </div>
     );
@@ -1541,12 +2064,50 @@ function DataTable({
         <div className="text-center">
           <div className="text-red-600 text-lg font-semibold mb-2">Error Loading Data</div>
           <div className="text-gray-600 mb-4">{error}</div>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-          >
-            Retry
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={() => {
+                setError(null);
+                setLoading(true);
+                fetchDivisionData();
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors mr-2"
+            >
+              Retry
+            </button>
+            <button
+                            onClick={() => {
+                fetch('http://localhost:5002/api/health')
+                  .then(res => res.json())
+                  .then(data => {
+                    alert('Health check successful! Check console for details.');
+                  })
+                  .catch(err => {
+                    console.error('❌ Health check failed:', err);
+                    alert('Health check failed! Check console for details.');
+                  });
+              }}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+            >
+              Test API Connection
+            </button>
+            <button
+                            onClick={() => {
+                fetch('http://localhost:5002/api/area_mapping/debug')
+                  .then(res => res.json())
+                  .then(data => {
+                    alert('Debug endpoint successful! Check console for details.');
+                  })
+                  .catch(err => {
+                    console.error('❌ Debug endpoint failed:', err);
+                    alert('Debug endpoint failed! Check console for details.');
+                  });
+              }}
+              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+            >
+              Test Area Mapping API
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1592,122 +2153,62 @@ function DataTable({
 
       {/* Grid Footer */}
       <div className="bg-gray-50 px-6 py-3 border-t border-gray-200 absolute bottom-0 left-0 right-0">
-        <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-gray-700 space-y-2 sm:space-y-0">
+        <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-gray-700 space-y-2 sm:space-y-0 mr-10">
           <div className="text-center sm:text-left">
             {loading ? (
-              'Loading...'
+              <div className="flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                Loading data...
+              </div>
             ) : (
-              `Showing ${memoizedData.length} entries`
+              <div className="text-sm">
+                <span className="font-medium">Page {pagination.currentPage}</span>
+                {typeof pagination.totalItems === 'number' ? (
+                  <span> of {pagination.totalPages} • </span>
+                ) : (
+                  <span> • </span>
+                )}
+                <span>Showing {memoizedData.length} entries</span>
+                {typeof pagination.totalItems === 'string' && (
+                  <span> (Total: {pagination.totalItems})</span>
+                )}
+                
+                {/* Show active filters */}
+                {(memoizedMasterFilters && Object.keys(memoizedMasterFilters).some(key => memoizedMasterFilters[key as keyof typeof memoizedMasterFilters])) ||
+                 (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) ? (
+                  <div className="mt-1 text-xs text-blue-600">
+                    🔍 Filters active
+                    {memoizedMasterFilters && Object.keys(memoizedMasterFilters).some(key => memoizedMasterFilters[key as keyof typeof memoizedMasterFilters]) && (
+                      <span className="ml-1">• Master: {Object.entries(memoizedMasterFilters).filter(([_, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')}</span>
+                    )}
+                    {memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0 && (
+                      <span className="ml-1">• Detailed: {Object.entries(memoizedDetailedFilters).filter(([_, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')}</span>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             )}
-            <button 
-              onClick={fetchDivisionData}
-              className="ml-4 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors cursor-pointer"
-              disabled={loading}
-              title="Refresh data"
-            >
-              {loading ? '🔄' : '🔄'} Refresh
-            </button>
-            
-            {/* Test Update Button */}
-            <button 
-              onClick={() => {
-                if (memoizedData.length > 0) {
-                  console.log('🧪 Testing update with first row...');
-                  handleUpdateData(0, 'name', 'TEST UPDATE ' + new Date().toLocaleTimeString());
-                }
-              }}
-              className="ml-2 px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors cursor-pointer"
-              disabled={loading || memoizedData.length === 0}
-              title="Test update"
-            >
-              🧪 Test Update
-            </button>
-            
-            {/* Copy Selected Cells Button */}
-            <button 
-              onClick={() => {
-                if (selectedCells.size > 0) {
-                  // Group selected cells by row for proper CSV format
-                  const rowsMap = new Map<number, Map<number, any>>();
-                  
-                  selectedCells.forEach(cellKey => {
-                    const [rowIndex, colIndex] = cellKey.split('-').map(Number);
-                    if (!rowsMap.has(rowIndex)) {
-                      rowsMap.set(rowIndex, new Map());
-                    }
-                    const columnId = columnIds[colIndex];
-                    if (columnId && memoizedData[rowIndex]) {
-                      rowsMap.get(rowIndex)!.set(colIndex, memoizedData[rowIndex][columnId as keyof Voter] || '');
-                    }
-                  });
-                  
-                  // Get min and max column indices for headers
-                  const allColIndices = Array.from(selectedCells).map(cellKey => parseInt(cellKey.split('-')[1]));
-                  const minColIndex = Math.min(...allColIndices);
-                  const maxColIndex = Math.max(...allColIndices);
-                  
-                  let csvData = '';
-                  
-                  // Add headers
-                  for (let col = minColIndex; col <= maxColIndex; col++) {
-                    const columnId = columnIds[col];
-                    if (columnId) {
-                      csvData += (col > minColIndex ? '\t' : '') + columnId;
-                    }
-                  }
-                  csvData += '\n';
-                  
-                  // Add data rows
-                  const sortedRows = Array.from(rowsMap.keys()).sort((a, b) => a - b);
-                  sortedRows.forEach(rowIndex => {
-                    const rowData = rowsMap.get(rowIndex)!;
-                    for (let col = minColIndex; col <= maxColIndex; col++) {
-                      const value = rowData.get(col) || '';
-                      csvData += (col > minColIndex ? '\t' : '') + value;
-                    }
-                    csvData += '\n';
-                  });
-                  
-                  navigator.clipboard.writeText(csvData).then(() => {
-                    console.log(`🔄 Copy Button: Copied ${getSelectedCellsCount()} cells to clipboard`);
-                    alert(`✅ Copied ${getSelectedCellsCount()} cells to clipboard!`);
-                  }).catch(err => {
-                    console.error('Failed to copy to clipboard:', err);
-                    alert('❌ Failed to copy to clipboard');
-                  });
-                } else {
-                  alert('❌ No cells selected. Please select cells first.');
-                }
-              }}
-              className="ml-2 px-3 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 transition-colors cursor-pointer"
-              disabled={selectedCells.size === 0}
-              title="Copy selected cells (Ctrl+C)"
-            >
-              📋 Copy Selected
-            </button>
-            
-            {/* Manual Sync Button - More prominent since auto-sync is disabled */}
-            <button 
-              onClick={() => {
-                setIsRefreshing(true);
-                fetchDivisionData().finally(() => {
-                  setIsRefreshing(false);
-                });
-              }}
-              className="ml-2 px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors cursor-pointer font-medium"
-              disabled={isRefreshing}
-              title="Manual sync with backend (auto-sync disabled)"
-            >
-              {isRefreshing ? '🔄 Syncing...' : '🔄 Sync Data'}
-            </button>
           </div>
           
           {/* Centered Pagination */}
           <div className="flex items-center justify-center space-x-1">
-            {/* Removed refetching indicator to prevent blinking */}
+            {/* Refresh Button */}
             <button 
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700"
-              onClick={() => handlePageChange(pagination.currentPage - 1)}
+              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 cursor-pointer"
+              onClick={refreshDataWithFilters}
+              disabled={loading}
+              title="Refresh with current filters"
+            >
+              🔄
+            </button>
+            
+            {/* Previous page button */}
+            <button 
+              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 cursor-pointer"
+              onClick={() => {
+                console.log(`🔄 Previous page clicked: ${pagination.currentPage - 1}`);
+                handlePageChange(pagination.currentPage - 1);
+              }}
               disabled={!pagination || pagination.currentPage <= 1 || loading}
               title="Previous"
             >
@@ -1742,15 +2243,18 @@ function DataTable({
             return pages.map((page, index) => (
               <div key={index}>
                 {page === '...' ? (
-                  <span className="px-2 py-1 text-gray-400">......</span>
+                  <span className="px-2 py-1 text-gray-400 cursor-pointer">......</span>
                 ) : (
                   <button
                     className={`px-3 py-1 rounded transition-colors ${
                       page === currentPage
-                        ? 'bg-gray-600 text-white'
-                        : 'border border-gray-300 hover:bg-gray-100 text-gray-700'
+                        ? 'bg-gray-600 text-white cursor-pointer'
+                        : 'border border-gray-300 hover:bg-gray-100 text-gray-700 cursor-pointer '
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
-                    onClick={() => handlePageChange(page as number)}
+                    onClick={() => {
+                      console.log(`🔄 Clicked on page ${page}`);
+                      handlePageChange(page as number);
+                    }}
                     disabled={loading}
                   >
                     {page}
@@ -1762,13 +2266,52 @@ function DataTable({
           
                         {/* Next page icon > */}
             <button 
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700"
-              onClick={() => handlePageChange(pagination.currentPage + 1)}
+              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 cursor-pointer"
+              onClick={() => {
+                console.log(`🔄 Next page clicked: ${pagination.currentPage + 1}`);
+                handlePageChange(pagination.currentPage + 1);
+              }}
               disabled={!pagination || pagination.currentPage >= pagination.totalPages || loading}
               title="Next page"
             >
               &gt;
             </button>
+            
+            {/* Go to Page input */}
+            <div className="flex items-center space-x-1 ml-2 cursor-pointer">
+              <span className="text-xs text-gray-600">Go to:</span>
+              <input
+                type="number"
+                min="1"
+                max={pagination.totalPages}
+                value={goToPageInput}
+                onChange={(e) => setGoToPageInput((e.target as HTMLInputElement).value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const page = parseInt((e.target as HTMLInputElement).value);
+                    console.log(`🔄 Go to page input: ${page}, total pages: ${pagination.totalPages}`);
+                    if (page >= 1 && page <= pagination.totalPages) {
+                      handlePageChange(page);
+                      setGoToPageInput(page.toString());
+                    } else {
+                      console.log(`❌ Invalid page number: ${page}`);
+                    }
+                  }
+                }}
+                onBlur={() => {
+                  const page = parseInt(goToPageInput);
+                  if (page >= 1 && page <= pagination.totalPages) {
+                    handlePageChange(page);
+                    setGoToPageInput(page.toString());
+                  } else {
+                    setGoToPageInput(pagination.currentPage.toString());
+                  }
+                }}
+                className="w-16 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
+              />
+              <span className="text-xs text-gray-500">of {pagination.totalPages}</span>
+            </div>
             
             {/* Items per page dropdown */}
             <div className="flex items-center space-x-1 ml-2">
@@ -1776,48 +2319,16 @@ function DataTable({
               <select
                 value={pagination.itemsPerPage}
                 onChange={(e) => handleItemsPerPageChange(parseInt(e.target.value))}
-                className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 disabled={loading}
               >
-                <option value={100}>100</option>
-                <option value={200}>200</option>
                 <option value={500}>500</option>
                 <option value={1000}>1000</option>
+                <option value={2000}>2000</option>
+                <option value={5000}>5000</option>
               </select>
             </div>
           </div>
-        </div>
-        
-        {/* Excel-like Selection Info Bar */}
-        <div className="mt-2 text-center text-xs text-gray-600">
-          {selectedCells.size > 0 ? (
-            <span>
-              Selected: {getSelectedCellsCount()} cells
-              {(() => {
-                const sumData = getSelectedCellsSum();
-                return sumData ? ` | Sum: ${sumData.sum.toFixed(2)} | Avg: ${sumData.average.toFixed(2)}` : '';
-              })()}
-            </span>
-          ) : selectedCell ? (
-            <span>Selected: 1 cell | Row {selectedCell.row + 1} | Col {columnIds.indexOf(selectedCell.column) + 1}</span>
-          ) : (
-            <span>No cells selected</span>
-          )}
-          
-          {/* Data Sync Status */}
-          {isRefreshing && (
-            <span className="ml-4 text-blue-600">
-              🔄 Syncing with backend...
-            </span>
-          )}
-        </div>
-        
-        {/* Keyboard Shortcuts Help */}
-        <div className="mt-1 text-center text-xs text-gray-500">
-          <span className="mr-4">⌨️ <strong>Shift + Arrow Keys</strong>: Extend selection</span>
-          <span className="mr-4">⌨️ <strong>Ctrl + A</strong>: Select all</span>
-          <span className="mr-4">⌨️ <strong>Ctrl + C</strong>: Copy selected</span>
-          <span>⌨️ <strong>Escape</strong>: Clear selection</span>
         </div>
       </div>
     </div>
