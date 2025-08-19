@@ -1,5 +1,22 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5002/api';
 
+// Format ISO date (YYYY-MM-DD) to backend expected format (DD-MMM-YYYY)
+const formatDateForBackend = (isoDate?: string): string | undefined => {
+  if (!isoDate) return undefined;
+  try {
+    if (/^\d{2}-[A-Za-z]{3}-\d{4}$/.test(isoDate)) return isoDate;
+    const d = new Date(isoDate);
+    if (isNaN(d.getTime())) return isoDate;
+    const day = String(d.getDate()).padStart(2, '0');
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mon = monthNames[d.getMonth()];
+    const year = d.getFullYear();
+    return `${day}-${mon}-${year}`;
+  } catch {
+    return isoDate;
+  }
+};
+
 export interface Voter {
   id: number;
   name: string;
@@ -223,10 +240,29 @@ class ApiService {
     return this.handleResponse<{ success: boolean; message: string }>(response);
   }
 
-  // Master filter options
-  async fetchMasterFilterOptions(): Promise<MasterFilterOptions> {
+  // Master filter options with cascading filters
+  async fetchMasterFilterOptions(masterFilters?: {
+    parliament?: string;
+    assembly?: string;
+    district?: string;
+    block?: string;
+  }): Promise<MasterFilterOptions> {
     try {
-      const response = await fetch(`${API_BASE_URL}/master-filter-options`);
+      let url = `${API_BASE_URL}/master-filter-options`;
+      
+      // Add filter parameters to URL if provided
+      if (masterFilters) {
+        const params = new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(masterFilters).filter(([_, value]) => value !== undefined && value !== '')
+          )
+        );
+        if (params.toString()) {
+          url += `?${params.toString()}`;
+        }
+      }
+      
+      const response = await fetch(url);
       return await this.handleResponse<MasterFilterOptions>(response);
     } catch (error) {
       console.log('🌐 Master filter options failed, returning empty options');
@@ -268,17 +304,22 @@ class ApiService {
     }
   }
 
-  // Dependent filter options based on master filter selection
-  async fetchDependentFilterOptions(masterFilters: {
+  // Dependent filter options based on current filters (master + detailed)
+  async fetchDependentFilterOptions(filters: FilterParams & {
     parliament?: string;
     assembly?: string;
     district?: string;
     block?: string;
   }): Promise<FilterOptions> {
     try {
+      // Apply DOB formatting if present
+      const payload: Record<string, any> = { ...filters };
+      if (payload.dateOfBirth) {
+        payload.dateOfBirth = formatDateForBackend(String(payload.dateOfBirth));
+      }
       const params = new URLSearchParams(
         Object.fromEntries(
-          Object.entries(masterFilters).filter(([_, value]) => value !== undefined && value !== '')
+          Object.entries(payload).filter(([_, value]) => value !== undefined && value !== '')
         )
       );
 
@@ -397,6 +438,47 @@ class ApiService {
     }
     
     return response.blob();
+  }
+
+  // Export filtered data based on master filters
+  async exportFilteredData(filters: {
+    parliament?: string;
+    assembly?: string;
+    district?: string;
+    block?: string;
+    format?: 'csv' | 'excel' | 'pdf';
+  }): Promise<{ success: boolean; message?: string; data?: Blob }> {
+    try {
+      const params = new URLSearchParams(
+        Object.fromEntries(
+          Object.entries(filters).filter(([_, value]) => value !== undefined && value !== '')
+        )
+      );
+
+      const response = await fetch(`${API_BASE_URL}/export-filtered?${params}`, {
+        headers: this.getAuthHeaders(),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          message: errorData.error || `Export failed with status: ${response.status}`
+        };
+      }
+      
+      const blob = await response.blob();
+      return {
+        success: true,
+        data: blob
+      };
+    } catch (error) {
+      console.error('Export error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Export failed'
+      };
+    }
   }
 
   // Save data

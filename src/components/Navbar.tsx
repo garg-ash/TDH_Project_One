@@ -9,13 +9,58 @@ import logo from '/Next/public/logo.png';
 export default function Navbar() {
   const router = useRouter();
   const [dataProcessDropdown, setDataProcessDropdown] = useState(false);
+  const [currentPath, setCurrentPath] = useState('/');
   
+  // Track current pathname for active menu indication
+  useEffect(() => {
+    const updateCurrentPath = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    
+    // Set initial path
+    updateCurrentPath();
+    
+    // Listen for route changes
+    window.addEventListener('popstate', updateCurrentPath);
+    
+    return () => {
+      window.removeEventListener('popstate', updateCurrentPath);
+    };
+  }, []);
+
   // Debug router object
   useEffect(() => {
     console.log('Navbar component mounted');
     console.log('Router object:', router);
     console.log('Current pathname:', window.location.pathname);
-  }, [router]);
+    console.log('Current active path:', currentPath);
+  }, [router, currentPath]);
+
+  // Helper function to check if a menu item is active
+  const isActive = (path: string) => {
+    if (path === '/') {
+      return currentPath === '/' || currentPath === '/filter';
+    }
+    return currentPath === path;
+  };
+
+  // Helper function to get button classes based on active state
+  const getButtonClasses = (path: string) => {
+    const baseClasses = "px-4 py-2 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer";
+    if (isActive(path)) {
+      return `${baseClasses} bg-gray-200 text-gray-900 hover:bg-gray-300 shadow-md`;
+    }
+    return `${baseClasses} text-gray-600 hover:text-gray-900 hover:bg-gray-100`;
+  };
+
+  // Helper function to get mobile button classes based on active state
+  const getMobileButtonClasses = (path: string) => {
+    const baseClasses = "px-3 py-2 rounded-lg transition-all duration-200 font-medium text-sm text-left cursor-pointer";
+    if (isActive(path)) {
+      return `${baseClasses} bg-gray-200 text-gray-900 hover:bg-gray-300 shadow-md`;
+    }
+    return `${baseClasses} text-gray-600 hover:text-gray-900 hover:bg-gray-100`;
+  };
 
   const handleModulesClick = () => {
     router.push('/modules');
@@ -134,13 +179,13 @@ export default function Navbar() {
           <div className="hidden lg:flex items-center space-x-1">
             <button 
               onClick={() => router.push('/dashboard')}
-              className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer"
+              className={getButtonClasses('/dashboard')}
             >
               Dashboard
             </button>
             <button 
               onClick={handleFilterClick}
-              className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer"
+              className={getButtonClasses('/')}
             >
               Filter
             </button>
@@ -148,7 +193,11 @@ export default function Navbar() {
             <div className="relative" data-dropdown="data-process">
               <button 
                 onClick={handleDataProcessClick}
-                className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer flex items-center space-x-1"
+                className={`px-4 py-2 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer flex items-center space-x-1 ${
+                  dataProcessDropdown || isActive('/surname') || isActive('/data-alteration')
+                    ? 'bg-gray-200 text-gray-900 shadow-md' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                }`}
               >
                 <span>Data Process</span>
                 <ChevronDown size={16} className={`transition-transform ${dataProcessDropdown ? 'rotate-180' : ''}`} />
@@ -229,13 +278,13 @@ export default function Navbar() {
           <div className="grid grid-cols-2 gap-2">
             <button 
               onClick={() => router.push('/dashboard')}
-              className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-sm text-left cursor-pointer"
+              className={getMobileButtonClasses('/dashboard')}
             >
               Dashboard
             </button>
             <button 
               onClick={handleFilterClick}
-              className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-sm text-left cursor-pointer"
+              className={getMobileButtonClasses('/')}
             >
               Filter
             </button>

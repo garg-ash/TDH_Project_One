@@ -58,7 +58,7 @@ import {
   flexRender,
   ColumnDef,
 } from '@tanstack/react-table';
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Eye, CheckCircle } from 'lucide-react';
 
 // Define interfaces for type safety
 interface DivisionDataItem {
@@ -81,6 +81,8 @@ interface Voter {
   id: string; // UI display ID (kept as-is)
   row_pk?: number; // DB primary key: id
   division_id?: string; // DB DIVISION_ID
+  family_id: string; // DB FAMILY_ID
+  cast_name: string;
   name: string;
   fname: string;
   mname: string;
@@ -95,6 +97,12 @@ interface Voter {
   block: string;
   tehsil: string;
   village: string;
+  gender: string;
+  address: string;
+  verify: string;
+  family_view: string;
+  caste_category: string;
+  religion: string;
   cast_id: string;
   cast_ida: string;
 }
@@ -118,6 +126,7 @@ interface ExcelCellProps {
   onStopEditing: () => void;
   loading?: boolean;
   isCopyBlinking?: boolean;
+  displayValue?: React.ReactNode;
 }
 
 const ExcelCell = memo(function ExcelCell({ 
@@ -137,7 +146,8 @@ const ExcelCell = memo(function ExcelCell({
   setEditValue,
   onStopEditing,
   loading = false,
-  isCopyBlinking = false
+  isCopyBlinking = false,
+  displayValue
 }: ExcelCellProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -302,14 +312,23 @@ const ExcelCell = memo(function ExcelCell({
           }}
         />
       ) : (
-        <div className="w-full flex items-center justify-between">
-          <span className="truncate flex-1">
-            {value || ''}
-          </span>
-          {loading && (
-            <div className="ml-2 w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          )}
-        </div>
+        displayValue !== undefined ? (
+          <div className="w-full flex items-center justify-between">
+            <div className="flex-1 min-w-0">{displayValue}</div>
+            {loading && (
+              <div className="ml-2 w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            )}
+          </div>
+        ) : (
+          <div className="w-full flex items-center justify-between">
+            <span className="truncate flex-1">
+              {value || ''}
+            </span>
+            {loading && (
+              <div className="ml-2 w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            )}
+          </div>
+        )
       )}
     </div>
   );
@@ -328,23 +347,18 @@ const columns: ColumnDef<Voter>[] = [
   },
   {
     accessorKey: 'division_id',
+    header: 'Temp Family ID',
+    size: 120,
+  },
+  {
+    accessorKey: 'family_id',
     header: 'Family ID',
     size: 120,
   },
   {
     accessorKey: 'name',
-    header: 'Name',
-    size: 180,
-  },
-  {
-    accessorKey: 'fname',
-    header: 'Father Name',
-    size: 150,
-  },
-  {
-    accessorKey: 'mname',
-    header: 'Mother Name',
-    size: 150,
+    header: 'Name, Gender, Age',
+    size: 240,
   },
   {
     accessorKey: 'surname',
@@ -361,11 +375,7 @@ const columns: ColumnDef<Voter>[] = [
     header: 'Mobile 2',
     size: 120,
   },
-  {
-    accessorKey: 'age',
-    header: 'Age',
-    size: 80,
-  },
+  // Removed separate Age column: will display under Name
   {
     accessorKey: 'date_of_birth',
     header: 'DOB',
@@ -373,12 +383,12 @@ const columns: ColumnDef<Voter>[] = [
   },
   {
     accessorKey: 'parliament',
-    header: 'Parliament',
+    header: 'Parliament No.',
     size: 140,
   },
   {
     accessorKey: 'assembly',
-    header: 'Assembly',
+    header: 'Assembly No.',
     size: 140,
   },
   {
@@ -393,12 +403,38 @@ const columns: ColumnDef<Voter>[] = [
   },
   {
     accessorKey: 'tehsil',
-    header: 'Tehsil',
+    header: 'Gram Panchayat (GP)',
     size: 120,
   },
   {
     accessorKey: 'village',
     header: 'Village',
+    size: 140,
+  },
+  // Removed separate Gender column: will display under Name
+  {
+    accessorKey: 'address',
+    header: 'Address',
+    size: 200,
+  },
+  {
+    accessorKey: 'verify',
+    header: 'Verify / Fview',
+    size: 100,
+  },
+  {
+    accessorKey: 'religion',
+    header: 'Religion',
+    size: 120,
+  },
+  {
+    accessorKey: 'caste_category',
+    header: 'Cast Category',
+    size: 140,
+  },
+  {
+    accessorKey: 'cast_name',
+    header: 'Cast',
     size: 140,
   },
   // {
@@ -408,7 +444,7 @@ const columns: ColumnDef<Voter>[] = [
   // },
   {
     accessorKey: 'cast_id',
-    header: 'Cast ID',
+    header: 'Cast Id',
     size: 100,
   },
   {
@@ -440,6 +476,32 @@ const calculateAge = (dateOfBirth: string): string => {
   }
 };
 
+// Format ISO date (YYYY-MM-DD) to backend expected format (DD-MMM-YYYY)
+const formatDateForBackend = (isoDate: string): string => {
+  if (!isoDate) return '';
+  try {
+    // If already looks like DD-MMM-YYYY, return as-is
+    if (/^\d{2}-[A-Za-z]{3}-\d{4}$/.test(isoDate)) return isoDate;
+    const d = new Date(isoDate);
+    if (isNaN(d.getTime())) return isoDate;
+    const day = String(d.getDate()).padStart(2, '0');
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mon = monthNames[d.getMonth()];
+    const year = d.getFullYear();
+    return `${day}-${mon}-${year}`;
+  } catch {
+    return isoDate;
+  }
+};
+
+// Create a stable string for shallow filter objects (sorted keys)
+const stableStringify = (obj: Record<string, any>): string => {
+  const keys = Object.keys(obj).sort();
+  const normalized: Record<string, any> = {};
+  for (const k of keys) normalized[k] = obj[k];
+  return JSON.stringify(normalized);
+};
+
 function DataTable({ 
   masterFilters, 
   detailedFilters 
@@ -447,9 +509,9 @@ function DataTable({
   masterFilters?: { parliament?: string; assembly?: string; district?: string; block?: string };
   detailedFilters?: any;
 }) {
-  // Memoize the filters to prevent unnecessary re-renders
-  const memoizedMasterFilters = useMemo(() => masterFilters, [JSON.stringify(masterFilters)]);
-  const memoizedDetailedFilters = useMemo(() => detailedFilters, [JSON.stringify(detailedFilters)]);
+  // Use filters directly to prevent unnecessary memoization issues
+  const memoizedMasterFilters = masterFilters;
+  const memoizedDetailedFilters = detailedFilters;
   
   const [data, setData] = useState<Voter[]>([]);
   const [pagination, setPagination] = useState<{
@@ -459,12 +521,13 @@ function DataTable({
     totalPages: number;
   }>({
     currentPage: 1,
-    itemsPerPage: 1000, // Show 1000 rows per page as requested
+    itemsPerPage: 100, // Show 100 rows per page for faster loading
     totalItems: 0,
     totalPages: 0,
   });
   const [goToPageInput, setGoToPageInput] = useState<string>('1');
   const [loading, setLoading] = useState(true);
+  const [filterLoading, setFilterLoading] = useState(false); // Separate loading state for filters
   const [error, setError] = useState<string | null>(null);
 
   // REMOVED: Unused states that were causing blinking
@@ -497,11 +560,12 @@ function DataTable({
         }
       }
       
-      // Add detailed filters to API call
+      // Add detailed filters to API call (with DOB formatting)
       if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
         Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
           if (value && value !== '') {
-            apiUrl += `&${key}=${encodeURIComponent(String(value))}`;
+            const val = key === 'dateOfBirth' ? formatDateForBackend(String(value)) : String(value);
+            apiUrl += `&${key}=${encodeURIComponent(val)}`;
           }
         });
       }
@@ -530,31 +594,78 @@ function DataTable({
         }
         
         // Map API data to Voter interface (correct mapping for area_mapping API)
-        const mappedData: Voter[] = apiData.map((item: any, index: number) => ({
+        let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
           id: String(item.id ?? index + 1),
           row_pk: typeof item.id === 'number' ? item.id : undefined,
           division_id: String(item.temp_family_Id || item.temp_family_id || ''),
+          family_id: item.family_id || '',
+          cast_name: item.caste || '',
           name: item.name || '',
           fname: item.father_name || '',
           mname: item.mother_name || '',
           surname: (() => {
             const name = item.name || '';
             const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
-            return nameParts.length > 1 ? nameParts.pop() : '';  // ✅ Only show surname if multiple words
+            return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
           })(),
           mobile1: item.mobile_number ? String(item.mobile_number) : '',
           mobile2: '',
-          age: '', // Calculate age from date_of_birth if needed
+          age: calculateAge(item.date_of_birth),
           date_of_birth: item.date_of_birth || '',
-          parliament: '', // Not available in area_mapping
-          assembly: '', // Not available in area_mapping
+          parliament: item.parliament || '', // ✅ FIXED: Read from database
+          assembly: item.assembly || '',     // ✅ FIXED: Read from database
           district: item.district || '',
           block: item.block || '',
-          tehsil: '',
+          tehsil: item.gp || '',
           village: item.village || '',
+          gender: item.gender || '',
+          address: item.address || '',
+          verify: item.verify || '',
+          family_view: item.family_view || '',
+          caste_category: item.caste_category || '',
+          religion: item.religion || item.minority_religion || '',
           cast_id: item.caste || '',
           cast_ida: item.caste_category || ''
         }));
+        // Backfill parliament and assembly via district → AC/PC mapping for consistency
+        try {
+          const districts = Array.from(new Set(mappedData.map(r => r.district).filter(Boolean)));
+          if (districts.length > 0) {
+            const mapRes = await fetch(`http://localhost:5002/api/acpc-mapping?districts=${encodeURIComponent(districts.join(','))}`);
+            if (mapRes.ok) {
+              const mapping: Record<string, { pc_id: any; ac_id: any }> = await mapRes.json();
+              mappedData = mappedData.map(row => {
+                const m = mapping[row.district];
+                if (!m) return row;
+                return {
+                  ...row,
+                  parliament: row.parliament || (m.pc_id != null ? String(m.pc_id) : ''),
+                  assembly: row.assembly || (m.ac_id != null ? String(m.ac_id) : ''),
+                };
+              });
+            }
+          }
+        } catch {}
+        // Resolve AC_CODE for each (district, block) using backend helper
+        try {
+          const pairs = Array.from(new Set(mappedData.map(r => JSON.stringify({ district: r.district, block: r.block })))).map(s => JSON.parse(s));
+          if (pairs.length > 0) {
+            const resMap = await fetch('http://localhost:5002/api/resolve-ac-codes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pairs })
+            });
+            if (resMap.ok) {
+              const mapping = await resMap.json();
+              const norm = (v: any) => String(v ?? '').trim().toUpperCase();
+              mappedData = mappedData.map(row => {
+                const key = norm(row.district) + '|' + norm(row.block);
+                const acCode = mapping[key];
+                return acCode ? { ...row, assembly: String(acCode) } : row;
+              });
+            }
+          }
+        } catch {}
         
         setData(mappedData);
         
@@ -609,7 +720,7 @@ function DataTable({
       setData([]);
       setLoading(false);
     }
-  }, [pagination.currentPage, pagination.itemsPerPage]); // FIXED: Add pagination dependencies
+  }, [pagination.currentPage, pagination.itemsPerPage]); // Remove filter dependencies to prevent blinking
 
   // FIXED: Stable memoization to prevent blinking
   const memoizedData = useMemo(() => data || [], [data]); // Depend on data to ensure updates are reflected
@@ -631,6 +742,8 @@ function DataTable({
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
   const [isSelecting, setIsSelecting] = useState(false);
   const [lastShiftArrowTime, setLastShiftArrowTime] = useState(0);
+
+  //
   
   // Track successful updates to refresh data
   const [lastUpdateTime, setLastUpdateTime] = useState<number>(0);
@@ -638,6 +751,151 @@ function DataTable({
   
   // Copy blink effect state
   const [isCopyBlinking, setIsCopyBlinking] = useState(false);
+
+  // Column resizing state
+  const [columnSizes, setColumnSizes] = useState<Record<string, number>>({});
+  const colResizeRef = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
+  
+  // Row resizing state
+  const [rowHeights, setRowHeights] = useState<Record<number, number>>({});
+  const rowResizeRef = useRef<{ rowIndex: number; startY: number; startHeight: number } | null>(null);
+
+  // Initialize columnSizes from static column definitions
+  useEffect(() => {
+    if (Object.keys(columnSizes).length === 0 && Array.isArray(columns)) {
+      const map: Record<string, number> = {};
+      columns.forEach(col => {
+        const id = (col.id ? col.id : (('accessorKey' in col) ? (col.accessorKey as string) : 'unknown')) as string;
+        const size = (col as any).size || 120;
+        if (id) map[id] = size;
+      });
+      setColumnSizes(map);
+    }
+  }, []);
+
+  const startColumnResize = useCallback((e: React.MouseEvent, colId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = (e as any).clientX as number;
+    const startWidth = columnSizes[colId] || 120;
+    colResizeRef.current = { colId, startX, startWidth };
+    const onMove = (ev: MouseEvent) => {
+      if (!colResizeRef.current) return;
+      const dx = ev.clientX - colResizeRef.current.startX;
+      const newWidth = Math.max(60, colResizeRef.current.startWidth + dx);
+      setColumnSizes(prev => ({ ...prev, [colResizeRef.current!.colId]: newWidth }));
+    };
+    const onUp = () => {
+      colResizeRef.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [columnSizes]);
+
+  const defaultRowHeight = 28;
+  const getRowHeight = useCallback((rowIndex: number) => rowHeights[rowIndex] || defaultRowHeight, [rowHeights]);
+
+  const startRowResize = useCallback((e: React.MouseEvent, rowIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = (e as any).clientY as number;
+    const startHeight = rowHeights[rowIndex] || defaultRowHeight;
+    rowResizeRef.current = { rowIndex, startY, startHeight };
+    const onMove = (ev: MouseEvent) => {
+      if (!rowResizeRef.current) return;
+      const dy = ev.clientY - rowResizeRef.current.startY;
+      const newHeight = Math.max(18, rowResizeRef.current.startHeight + dy);
+      setRowHeights(prev => ({ ...prev, [rowResizeRef.current!.rowIndex]: newHeight }));
+    };
+    const onUp = () => {
+      rowResizeRef.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [rowHeights]);
+
+  // Family View modal state
+  const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
+  const [familyModalFamilyId, setFamilyModalFamilyId] = useState<string>('');
+  const [familyMembers, setFamilyMembers] = useState<Voter[]>([]);
+  const [familyLoading, setFamilyLoading] = useState<boolean>(false);
+  const [familyError, setFamilyError] = useState<string | null>(null);
+
+  const openFamilyModal = useCallback(async (familyId: string) => {
+    if (!familyId) {
+      alert('Family ID missing for this row');
+      return;
+    }
+    setIsFamilyModalOpen(true);
+    setFamilyModalFamilyId(familyId);
+    setFamilyLoading(true);
+    setFamilyError(null);
+    try {
+      // Fetch all members with this family_id
+      const url = `http://localhost:5002/api/area_mapping?family_id=${encodeURIComponent(familyId)}&limit=1000`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`HTTP ${res.status}: ${txt}`);
+      }
+      const apiData = await res.json();
+      if (!Array.isArray(apiData)) {
+        throw new Error('Unexpected API response');
+      }
+      const members: Voter[] = apiData.map((item: any, index: number) => ({
+        id: String(item.id ?? index + 1),
+        row_pk: typeof item.id === 'number' ? item.id : undefined,
+        division_id: String(item.temp_family_Id || item.temp_family_id || ''),
+        family_id: item.family_id || '',
+        cast_name: item.caste || '',
+        name: item.name || '',
+        fname: item.father_name || '',
+        mname: item.mother_name || '',
+        surname: (() => {
+          const name = item.name || '';
+          const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
+          // ✅ FIXED: Only show surname if multiple words, otherwise blank
+          return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+        })(),
+        mobile1: item.mobile_number ? String(item.mobile_number) : '',
+        mobile2: '',
+        age: '',
+        date_of_birth: item.date_of_birth || '',
+        parliament: item.parliament || '',
+        assembly: item.assembly || '',
+        district: item.district || '',
+        block: item.block || '',
+        tehsil: item.gp || '',
+        village: item.village || '',
+        gender: item.gender || '',
+        address: item.address || '',
+        verify: item.verify || '',
+        family_view: item.family_view || '',
+        caste_category: item.caste_category || '',
+        religion: item.religion || item.minority_religion || '',
+        cast_id: item.caste || '',
+        cast_ida: item.caste_category || ''
+      }));
+      setFamilyMembers(members);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      setFamilyError(msg);
+    } finally {
+      setFamilyLoading(false);
+    }
+  }, []);
+
+  const closeFamilyModal = useCallback(() => {
+    setIsFamilyModalOpen(false);
+    setFamilyModalFamilyId('');
+    setFamilyMembers([]);
+    setFamilyError(null);
+    setFamilyLoading(false);
+  }, []);
   
   const tableRef = useRef<HTMLDivElement>(null);
   const previousMasterFiltersRef = useRef<typeof masterFilters | undefined>(undefined);
@@ -703,7 +961,7 @@ function DataTable({
   }, [selectedCells, memoizedData]);
 
   // Pagination handlers - handlePageChange function
-  const handlePageChange = useCallback(async (page: number) => {
+  const handlePageChange = useCallback(async (page: number, isFilterChange: boolean = false) => {
     if (page < 1 || page > pagination.totalPages) return;
     
     // Update pagination state
@@ -715,7 +973,10 @@ function DataTable({
     
     // Fetch data for the new page
     try {
-      setLoading(true);
+      // Don't show loading state for filter changes to prevent blinking
+      if (!isFilterChange) {
+        setLoading(true);
+      }
       const limit = pagination.itemsPerPage;
       
       // Build API URL with filters
@@ -737,11 +998,12 @@ function DataTable({
         }
       }
       
-      // Add detailed filters to API call
+      // Add detailed filters to API call (with DOB formatting)
       if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
         Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
           if (value && value !== '') {
-            apiUrl += `&${key}=${encodeURIComponent(String(value))}`;
+            const val = key === 'dateOfBirth' ? formatDateForBackend(String(value)) : String(value);
+            apiUrl += `&${key}=${encodeURIComponent(val)}`;
           }
         });
       }
@@ -767,31 +1029,77 @@ function DataTable({
         }
         
         // Map API data to Voter interface
-        const mappedData: Voter[] = apiData.map((item: any, index: number) => ({
+        let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
           id: String(item.id ?? index + 1),
           row_pk: typeof item.id === 'number' ? item.id : undefined,
           division_id: String(item.temp_family_Id ?? item.id ?? ''),
+          family_id: item.family_id || '',
+          cast_name: item.caste || '',
           name: item.name || '',
           fname: item.father_name || '',
           mname: item.mother_name || '',
           surname: (() => {
             const name = item.name || '';
             const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
-            return nameParts.length > 1 ? nameParts.pop() : '';  // ✅ Only show surname if multiple words
+            return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
           })(),
           mobile1: item.mobile_number ? String(item.mobile_number) : '',
           mobile2: '',
-          age: '', // Calculate age from date_of_birth if needed
+          age: calculateAge(item.date_of_birth),
           date_of_birth: item.date_of_birth || '',
-          parliament: '', // Not available in area_mapping
-          assembly: '', // Not available in area_mapping
+          parliament: item.parliament || '', // ✅ FIXED: Read from database
+          assembly: item.assembly || '',     // ✅ FIXED: Read from database
           district: item.district || '',
           block: item.block || '',
-          tehsil: '',
+          tehsil: item.gp || '',
           village: item.village || '',
+          gender: item.gender || '',
+          address: item.address || '',
+          verify: item.verify || '',
+          family_view: item.family_view || '',
+          caste_category: item.caste_category || '',
+          religion: item.religion || item.minority_religion || '',
           cast_id: item.caste || '',
           cast_ida: item.caste_category || ''
         }));
+        // Backfill parliament and assembly via district → AC/PC mapping for consistency
+        try {
+          const districts = Array.from(new Set(mappedData.map(r => r.district).filter(Boolean)));
+          if (districts.length > 0) {
+            const mapRes = await fetch(`http://localhost:5002/api/acpc-mapping?districts=${encodeURIComponent(districts.join(','))}`);
+            if (mapRes.ok) {
+              const mapping: Record<string, { pc_id: any; ac_id: any }> = await mapRes.json();
+              mappedData = mappedData.map(row => {
+                const m = mapping[row.district];
+                if (!m) return row;
+                return {
+                  ...row,
+                  parliament: row.parliament || (m.pc_id != null ? String(m.pc_id) : ''),
+                  assembly: row.assembly || (m.ac_id != null ? String(m.ac_id) : ''),
+                };
+              });
+            }
+          }
+        } catch {}
+        try {
+          const pairs = Array.from(new Set(mappedData.map(r => JSON.stringify({ district: r.district, block: r.block })))).map(s => JSON.parse(s));
+          if (pairs.length > 0) {
+            const resMap = await fetch('http://localhost:5002/api/resolve-ac-codes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pairs })
+            });
+            if (resMap.ok) {
+              const mapping = await resMap.json();
+              const norm = (v: any) => String(v ?? '').trim().toUpperCase();
+              mappedData = mappedData.map(row => {
+                const key = norm(row.district) + '|' + norm(row.block);
+                const acCode = mapping[key];
+                return acCode ? { ...row, assembly: String(acCode) } : row;
+              });
+            }
+          }
+        } catch {}
         
         setData(mappedData);
         
@@ -839,14 +1147,26 @@ function DataTable({
         throw new Error(`Failed to parse API response: ${errorMessage}`);
       }
       
-      setLoading(false);
+      // Only set loading to false if it's not a filter change
+      if (!isFilterChange) {
+        setLoading(false);
+      } else {
+        // Set filter loading to false when filter change is complete
+        setFilterLoading(false);
+      }
     } catch (error) {
       console.error('❌ Error fetching data for page:', page, error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setError(`Failed to fetch data for page ${page}: ${errorMessage}`);
-      setLoading(false);
+      // Only set loading to false if it's not a filter change
+      if (!isFilterChange) {
+        setLoading(false);
+      } else {
+        // Set filter loading to false when filter change is complete
+        setFilterLoading(false);
+      }
     }
-  }, [columnIds, pagination.totalPages, pagination.itemsPerPage]);
+  }, [columnIds, pagination.totalPages, pagination.itemsPerPage, memoizedMasterFilters, memoizedDetailedFilters]);
 
   const handleItemsPerPageChange = useCallback(async (newItemsPerPage: number) => {
     setPagination(prev => ({ 
@@ -879,11 +1199,12 @@ function DataTable({
         }
       }
       
-      // Add detailed filters to API call
+      // Add detailed filters to API call (with DOB formatting)
       if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
         Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
           if (value && value !== '') {
-            apiUrl += `&${key}=${encodeURIComponent(String(value))}`;
+            const val = key === 'dateOfBirth' ? formatDateForBackend(String(value)) : String(value);
+            apiUrl += `&${key}=${encodeURIComponent(val)}`;
           }
         });
       }
@@ -909,31 +1230,77 @@ function DataTable({
         }
         
         // Map API data to Voter interface
-        const mappedData: Voter[] = apiData.map((item: any, index: number) => ({
+        let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
           id: String(item.id ?? index + 1),
           row_pk: typeof item.id === 'number' ? item.id : undefined,
           division_id: String(item.temp_family_Id ?? item.id ?? ''),
+          family_id: item.family_id || '',
+          cast_name: item.caste || '',
           name: item.name || '',
           fname: item.father_name || '',
           mname: item.mother_name || '',
           surname: (() => {
             const name = item.name || '';
             const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
-            return nameParts.length > 1 ? nameParts.pop() : '';  // ✅ Only show surname if multiple words
+            return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
           })(),
           mobile1: item.mobile_number ? String(item.mobile_number) : '',
           mobile2: '',
-          age: '', // Calculate age from date_of_birth if needed
+          age: calculateAge(item.date_of_birth),
           date_of_birth: item.date_of_birth || '',
-          parliament: '', // Not available in area_mapping
-          assembly: '', // Not available in area_mapping
+          parliament: item.parliament || '', // ✅ FIXED: Read from database
+          assembly: item.assembly || '',     // ✅ FIXED: Read from database
           district: item.district || '',
           block: item.block || '',
-          tehsil: '',
+          tehsil: item.gp || '',
           village: item.village || '',
+          gender: item.gender || '',
+          address: item.address || '',
+          verify: item.verify || '',
+          family_view: item.family_view || '',
+          caste_category: item.caste_category || '',
+          religion: item.religion || item.minority_religion || '',
           cast_id: item.caste || '',
           cast_ida: item.caste_category || ''
         }));
+        // Backfill parliament and assembly via district → AC/PC mapping for consistency
+        try {
+          const districts = Array.from(new Set(mappedData.map(r => r.district).filter(Boolean)));
+          if (districts.length > 0) {
+            const mapRes = await fetch(`http://localhost:5002/api/acpc-mapping?districts=${encodeURIComponent(districts.join(','))}`);
+            if (mapRes.ok) {
+              const mapping: Record<string, { pc_id: any; ac_id: any }> = await mapRes.json();
+              mappedData = mappedData.map(row => {
+                const m = mapping[row.district];
+                if (!m) return row;
+                return {
+                  ...row,
+                  parliament: row.parliament || (m.pc_id != null ? String(m.pc_id) : ''),
+                  assembly: row.assembly || (m.ac_id != null ? String(m.ac_id) : ''),
+                };
+              });
+            }
+          }
+        } catch {}
+        try {
+          const pairs = Array.from(new Set(mappedData.map(r => JSON.stringify({ district: r.district, block: r.block })))).map(s => JSON.parse(s));
+          if (pairs.length > 0) {
+            const resMap = await fetch('http://localhost:5002/api/resolve-ac-codes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pairs })
+            });
+            if (resMap.ok) {
+              const mapping = await resMap.json();
+              const norm = (v: any) => String(v ?? '').trim().toUpperCase();
+              mappedData = mappedData.map(row => {
+                const key = norm(row.district) + '|' + norm(row.block);
+                const acCode = mapping[key];
+                return acCode ? { ...row, assembly: String(acCode) } : row;
+              });
+            }
+          }
+        } catch {}
         
         setData(mappedData);
         
@@ -988,7 +1355,7 @@ function DataTable({
       setError(`Failed to fetch data with new page size: ${errorMessage}`);
       setLoading(false);
     }
-  }, [columnIds]);
+  }, [columnIds, memoizedMasterFilters, memoizedDetailedFilters]);
 
   // Effect to fetch data on component mount
   useEffect(() => {
@@ -1049,31 +1416,61 @@ function DataTable({
           }
           
                   // Map API data to Voter interface (correct mapping for area_mapping API) - FIRST INSTANCE
-        const mappedData: Voter[] = apiData.map((item: any, index: number) => ({
+        let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
           id: String(item.id ?? index + 1),
           row_pk: typeof item.id === 'number' ? item.id : undefined,
           division_id: String(item.temp_family_Id || item.temp_family_id || ''),
+            family_id: item.family_id || '',
+            cast_name: item.caste || '',
             name: item.name || '',
             fname: item.father_name || '',
             mname: item.mother_name || '',
             surname: (() => {
               const name = item.name || '';
               const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
-              return nameParts.length > 1 ? nameParts.pop() : '';  // ✅ Only show surname if multiple words
+              // ✅ FIXED: Only show surname if multiple words, otherwise blank
+              return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
             })(),
             mobile1: item.mobile_number ? String(item.mobile_number) : '',
             mobile2: '',
             age: calculateAge(item.date_of_birth),
             date_of_birth: item.date_of_birth || '',
-            parliament: '', // Not available in area_mapping
-            assembly: '', // Not available in area_mapping
+            parliament: item.parliament || '', // ✅ FIXED: Read from database
+            assembly: item.assembly || '',     // ✅ FIXED: Read from database
             district: item.district || '',
             block: item.block || '',
             tehsil: item.gp || '',
             village: item.village || '',
+            gender: item.gender || '',
+            address: item.address || '',
+            verify: item.verify || '',
+            family_view: item.family_view || '',
+            caste_category: item.caste_category || '',
+            religion: item.religion || item.minority_religion || '',
             cast_id: item.caste || '',
             cast_ida: item.caste_category || ''
           }));
+
+          try {
+            const districts = Array.from(new Set(mappedData.map(r => r.district).filter(Boolean)));
+            if (districts.length > 0) {
+              const mapRes = await fetch(`http://localhost:5002/api/acpc-mapping?districts=${encodeURIComponent(districts.join(','))}`);
+              if (mapRes.ok) {
+                const mapping: Record<string, { pc_id: any; ac_id: any }> = await mapRes.json();
+                mappedData = mappedData.map(row => {
+                  const m = mapping[row.district];
+                  if (m) {
+                    return {
+                      ...row,
+                      parliament: row.parliament || (m.pc_id != null ? String(m.pc_id) : ''),
+                      assembly: row.assembly || (m.ac_id != null ? String(m.ac_id) : ''),
+                    };
+                  }
+                  return row;
+                });
+              }
+            }
+          } catch {}
           
           setData(mappedData);
           
@@ -1132,34 +1529,43 @@ function DataTable({
     };
     
     initialFetch();
-  }, [pagination.itemsPerPage, memoizedMasterFilters, memoizedDetailedFilters]);
+  }, [pagination.itemsPerPage]); // Only depend on page size changes, not filters
 
-  // FIXED: Simplified filter effect to prevent blinking
+  // Filter effect: only run when actual filter values change, not on page navigation
+  const lastFiltersRef = useRef<string>('');
+  const filterDebounceRef = useRef<number | null>(null);
   useEffect(() => {
-    // Only refetch if we already have data and filters actually changed
-    if (data.length > 0 && memoizedMasterFilters && Object.keys(memoizedMasterFilters).length > 0) {
-      const timeoutId = setTimeout(() => {
-        // Reset to first page when filters change
-        handlePageChange(1);
-      }, 500); // Increased delay to prevent rapid calls
-      
-      return () => clearTimeout(timeoutId);
+    // Always clear any pending debounce to avoid race that resets page after manual navigation
+    if (filterDebounceRef.current) {
+      clearTimeout(filterDebounceRef.current);
+      filterDebounceRef.current = null;
     }
-  }, [memoizedMasterFilters, data.length, handlePageChange]);
 
-  // Effect to refetch data when detailed filters change
-  useEffect(() => {
-    // Only refetch if we already have data and detailed filters actually changed
-    if (data.length > 0 && memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
-      const timeoutId = setTimeout(() => {
-        console.log('🔍 Detailed filters changed, refetching data:', memoizedDetailedFilters);
-        // Reset to first page when detailed filters change
-        handlePageChange(1);
-      }, 500); // Increased delay to prevent rapid calls
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [memoizedDetailedFilters, data.length, handlePageChange]);
+    if (loading) return; // avoid on initial load transitions
+    const master = memoizedMasterFilters || {};
+    const detailed = memoizedDetailedFilters || {};
+    const currentFilters = stableStringify({ ...master, ...detailed });
+    if (currentFilters === lastFiltersRef.current) return; // no real change
+    lastFiltersRef.current = currentFilters;
+
+    const hasMasterFilters = Object.values(master).some(val => val && val !== '');
+    const hasDetailedFilters = Object.values(detailed).some(val => val && val !== '');
+    if (!(hasMasterFilters || hasDetailedFilters)) return;
+
+    filterDebounceRef.current = window.setTimeout(() => {
+      console.log('🔍 Filters changed, refetching data:', { masterFilters: master, detailedFilters: detailed });
+      setFilterLoading(true);
+      // Reset to first page and refetch, but only once per filter-change
+      setPagination(prev => ({ ...prev, currentPage: 1 }));
+      handlePageChange(1, true);
+    }, 250);
+    return () => {
+      if (filterDebounceRef.current) {
+        clearTimeout(filterDebounceRef.current);
+        filterDebounceRef.current = null;
+      }
+    };
+  }, [memoizedMasterFilters, memoizedDetailedFilters, loading, handlePageChange]);
 
   // Effect to refresh data after successful updates to ensure backend sync
   // DISABLED: User prefers no automatic refresh, only immediate cell updates
@@ -1211,12 +1617,19 @@ function DataTable({
         'mobile2': 'mobile_number',
         'age': 'date_of_birth', // Age is calculated from date_of_birth
         'date_of_birth': 'date_of_birth',
-        'parliament': 'district', // Map to available field
-        'assembly': 'block', // Map to available field
+        'parliament': 'parliament', // ✅ FIXED: Parliament updates parliament column
+        'assembly': 'assembly',     // ✅ FIXED: Assembly updates assembly column
         'district': 'district',
         'block': 'block',
         'tehsil': 'gp',
         'village': 'village',
+        'gender': 'gender',
+        'family_id': 'family_id',
+        'address': 'address',
+        'verify': 'verify',
+        'family_view': 'family_view',
+        'caste_category': 'caste_category',
+        'religion': 'minority_religion',
         'cast_id': 'caste',
         'cast_ida': 'caste_category'
       };
@@ -1256,7 +1669,8 @@ function DataTable({
             // Special handling: If we're updating the name, also update the surname column
             if (columnId === 'name') {
               const nameParts = value.split(' ').filter((part: string) => part.trim() !== '');
-              updatedItem.surname = nameParts.length > 1 ? nameParts.pop() : '';
+              // ✅ FIXED: Only show surname if multiple words, otherwise blank
+              updatedItem.surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
             }
             
             return updatedItem;
@@ -1292,6 +1706,49 @@ function DataTable({
     const maxCols = columnIds.length;
     return { maxRows, maxCols };
   }, [pagination?.itemsPerPage, memoizedData?.length, columnIds.length]);
+
+  // Remove orphaned reference to updateSelectionWithArrow (handled inline)
+  /*
+  updateSelectionWithArrow = (fromRow: number, fromColumnId: string, direction: 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight') => {
+    const start = selectionRange ? selectionRange.start : { row: fromRow, column: fromColumnId };
+    const currentEndRow = selectionRange ? selectionRange.end.row : fromRow;
+    const currentEndColId = selectionRange ? selectionRange.end.column : fromColumnId;
+    const currentEndColIndex = columnIds.indexOf(currentEndColId);
+    let newEndRow = currentEndRow;
+    let newEndColIndex = currentEndColIndex;
+    const { maxRows, maxCols } = gridDimensions;
+    switch (direction) {
+      case 'ArrowUp':
+        newEndRow = Math.max(0, currentEndRow - 1);
+        break;
+      case 'ArrowDown':
+        newEndRow = Math.min((memoizedData?.length || maxRows) - 1, currentEndRow + 1);
+        break;
+      case 'ArrowLeft':
+        newEndColIndex = Math.max(0, currentEndColIndex - 1);
+        break;
+      case 'ArrowRight':
+        newEndColIndex = Math.min(maxCols - 1, currentEndColIndex + 1);
+        break;
+    }
+    const newEndColId = columnIds[newEndColIndex];
+    if (!newEndColId) return;
+    const newRange = { start, end: { row: newEndRow, column: newEndColId } };
+    setSelectionRange(newRange);
+    const startRow = Math.min(newRange.start.row, newRange.end.row);
+    const endRow = Math.max(newRange.start.row, newRange.end.row);
+    const startColIndex = Math.min(columnIds.indexOf(newRange.start.column), columnIds.indexOf(newRange.end.column));
+    const endColIndex = Math.max(columnIds.indexOf(newRange.start.column), columnIds.indexOf(newRange.end.column));
+    const newSet = new Set<string>();
+    for (let r = startRow; r <= endRow; r++) {
+      for (let c = startColIndex; c <= endColIndex; c++) {
+        const colId = columnIds[c];
+        if (colId) newSet.add(`${r}-${colId}`);
+      }
+    }
+    setSelectedCells(newSet);
+  };
+  */
 
   // Consolidated navigation function to prevent conflicts
   const navigateToCell = useCallback((fromRow: number, fromColumnId: string, toRow: number, toColumnId: string) => {
@@ -1386,7 +1843,7 @@ function DataTable({
   }, [editingCell, selectedCell]);
 
   const handleCellDoubleClick = useCallback((rowIndex: number, columnId: string) => {
-    if (columnId === 'select') return; // Don't edit row numbers
+    if (columnId === 'select' || columnId === 'verify') return; // Don't edit row numbers or verify column
     
     // Allow editing even for empty cells - get current value or empty string
     const currentValue = (memoizedData && memoizedData[rowIndex]) ? (memoizedData[rowIndex]?.[columnId as keyof Voter] || '') : '';
@@ -1452,7 +1909,7 @@ function DataTable({
         e.stopPropagation();
         break;
       case 'F2':
-        if (columnId !== 'select') {
+        if (columnId !== 'select' && columnId !== 'verify') {
           // Allow editing even for empty cells - get current value or empty string
           const currentValue = (memoizedData && memoizedData[rowIndex]) ? (memoizedData[rowIndex]?.[columnId as keyof Voter] || '') : '';
           setEditValue(String(currentValue));
@@ -1514,14 +1971,14 @@ function DataTable({
         break;
       case 'Delete':
       case 'Backspace':
-        if (columnId !== 'select') {
+        if (columnId !== 'select' && columnId !== 'verify') {
           handleUpdateData(rowIndex, columnId, '');
         }
         e.preventDefault();
         break;
       default:
         // Direct typing: Any printable character starts editing immediately
-        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && columnId !== 'select') {
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && columnId !== 'select' && columnId !== 'verify') {
           setEditValue(e.key);
           setEditingCell({ row: rowIndex, column: columnId });
           setSelectedCell({ row: rowIndex, column: columnId });
@@ -1620,6 +2077,22 @@ function DataTable({
       setFocusedCell({ row: 0, column: columnIds[0] });
     }
   }, [memoizedData?.length, selectedCell, loading, columnIds[0]]);
+
+  // Effect to listen for refresh events from MasterFilter
+  useEffect(() => {
+    const handleRefreshEvent = () => {
+      console.log('🔄 Refresh event received from MasterFilter');
+      // Reset to first page and fetch fresh data
+      setPagination(prev => ({ ...prev, currentPage: 1 }));
+      fetchDivisionData();
+    };
+
+    window.addEventListener('refreshDataTable', handleRefreshEvent);
+    
+    return () => {
+      window.removeEventListener('refreshDataTable', handleRefreshEvent);
+    };
+  }, [fetchDivisionData]);
 
   // Effect to update goToPageInput when current page changes
   useEffect(() => {
@@ -1726,48 +2199,53 @@ function DataTable({
       if (e.shiftKey && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         const currentCell = currentCellRef.current;
         if (currentCell && !editingCell) {
-          // Add throttling to prevent rapid selection changes
           const now = Date.now();
-          if (now - lastShiftArrowTime < 100) { // 100ms throttle
+          if (now - lastShiftArrowTime < 100) {
             e.preventDefault();
             e.stopPropagation();
             return;
           }
           setLastShiftArrowTime(now);
-          
           e.preventDefault();
           e.stopPropagation();
-          
-          const currentColumnIndex = columnIds.indexOf(currentCell.column);
-          let targetRow = currentCell.row;
-          let targetCol = currentColumnIndex;
-          
+
+          // Build/extend rectangular selection from current/previous anchor
+          const start = selectionRange ? selectionRange.start : { row: currentCell.row, column: currentCell.column };
+          const currentEndRow = selectionRange ? selectionRange.end.row : currentCell.row;
+          const currentEndColId = selectionRange ? selectionRange.end.column : currentCell.column;
+          const currentEndColIndex = columnIds.indexOf(currentEndColId);
+          let newEndRow = currentEndRow;
+          let newEndColIndex = currentEndColIndex;
           switch (e.key) {
             case 'ArrowUp':
-              targetRow = Math.max(0, currentCell.row - 1);
+              newEndRow = Math.max(0, currentEndRow - 1);
               break;
             case 'ArrowDown':
-              targetRow = Math.min((memoizedData?.length || 1) - 1, currentCell.row + 1);
+              newEndRow = Math.min((memoizedData?.length || 1) - 1, currentEndRow + 1);
               break;
             case 'ArrowLeft':
-              targetCol = Math.max(0, currentColumnIndex - 1);
+              newEndColIndex = Math.max(0, currentEndColIndex - 1);
               break;
             case 'ArrowRight':
-              targetCol = Math.min(columnIds.length - 1, currentColumnIndex + 1);
+              newEndColIndex = Math.min(columnIds.length - 1, currentEndColIndex + 1);
               break;
           }
-          
-          if (targetRow !== currentCell.row || targetCol !== currentColumnIndex) {
-            const targetColumnId = columnIds[targetCol];
-            if (targetColumnId) {
-              // Add the target cell to selected cells set
-              const targetCellKey = `${targetRow}-${targetColumnId}`;
-              setSelectedCells(prev => new Set([...prev, targetCellKey]));
-              
-              // Update the focused cell
-              setSelectedCell({ row: targetRow, column: targetColumnId });
-              setFocusedCell({ row: targetRow, column: targetColumnId });
+          const newEndColId = columnIds[newEndColIndex];
+          if (newEndColId) {
+            const newRange = { start, end: { row: newEndRow, column: newEndColId } };
+            setSelectionRange(newRange);
+            const startRow = Math.min(newRange.start.row, newRange.end.row);
+            const endRow = Math.max(newRange.start.row, newRange.end.row);
+            const startColIndex = Math.min(columnIds.indexOf(newRange.start.column), columnIds.indexOf(newRange.end.column));
+            const endColIndex = Math.max(columnIds.indexOf(newRange.start.column), columnIds.indexOf(newRange.end.column));
+            const newSet = new Set<string>();
+            for (let r = startRow; r <= endRow; r++) {
+              for (let c = startColIndex; c <= endColIndex; c++) {
+                const cid = columnIds[c];
+                if (cid) newSet.add(`${r}-${cid}`);
+              }
             }
+            setSelectedCells(newSet);
           }
           return;
         }
@@ -1781,6 +2259,22 @@ function DataTable({
       const activeElement = document.activeElement;
       if (!activeElement || !activeElement.hasAttribute('data-cell')) return;
       
+      // Start editing immediately on printable key (Excel-like typing to edit)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+        if (currentCell.column === 'verify' || currentCell.column === 'select') {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        setEditValue(e.key);
+        setEditingCell({ row: currentCell.row, column: currentCell.column });
+        setSelectedCell({ row: currentCell.row, column: currentCell.column });
+        setFocusedCell({ row: currentCell.row, column: currentCell.column });
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
       // Only handle keys that aren't already handled by the cell
       // This prevents double handling and cell skipping
       if (['Tab'].includes(e.key)) {
@@ -1839,19 +2333,43 @@ function DataTable({
               key={`${index}-${columnId}`}
               className="border-r border-gray-300 border-b border-gray-300 p-0"
               style={{ 
-                width: displayColumns[cellIndex]?.size, 
-                minWidth: displayColumns[cellIndex]?.size,
-                height: '28px'
+                width: (() => {
+                  const id = displayColumnIds[cellIndex];
+                  const defaultSize = displayColumns[cellIndex]?.size;
+                  return (columnSizes[id] || defaultSize);
+                })(), 
+                minWidth: (() => {
+                  const id = displayColumnIds[cellIndex];
+                  const defaultSize = displayColumns[cellIndex]?.size;
+                  return (columnSizes[id] || defaultSize);
+                })(),
+                height: '28px',
+                ...(cellIndex === 0 ? { position: 'sticky', left: 0, zIndex: 1, background: 'white' } : {})
               }}
             >
               {loading ? (
                 <div className={`h-6 animate-pulse ${cellIndex === 0 ? 'bg-gray-100' : 'bg-gray-50'}`}></div>
               ) : (
+                columnId === 'family_view' ? (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const famId = (rowData as any).family_id || (rowData as any).division_id || '';
+                        openFamilyModal(String(famId));
+                      }}
+                      className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded cursor-pointer"
+                      title="View family members"
+                    >
+                      View
+                    </button>
+                  </div>
+                ) : (
                 <ExcelCell
                   value={
                     columnId === 'select' 
-                      ? index + 1 // FIXED: Simple sequential numbering like DivisionDataTable
-                      : rowData[columnId as keyof Voter] || '' // FIXED: Direct data access, no repetition
+                      ? index + 1
+                      : rowData[columnId as keyof Voter] || ''
                   }
                   rowIndex={index}
                   columnId={columnId}
@@ -1869,7 +2387,44 @@ function DataTable({
                   onStopEditing={handleStopEditing}
                   loading={updatingCells.has(`${index}-${columnId}`)}
                   isCopyBlinking={isCopyBlinking}
+                  displayValue={
+                    columnId === 'name'
+                      ? (
+                          <div className="flex items-center space-x-2 truncate">
+                            <span className="truncate">{rowData.name || ''}</span>
+                            <span className="text-gray-400">•</span>
+                            <span className="shrink-0 text-gray-700">{rowData.gender || ''}</span>
+                            <span className="text-gray-400">•</span>
+                            <span className="shrink-0 text-gray-700">{rowData.age || ''}</span>
+                          </div>
+                        )
+                      : columnId === 'verify'
+                        ? (
+                            <div className="flex items-center space-x-2 truncate">
+                              <div className="flex items-center space-x-1">
+                                {String(rowData.verify || '').toLowerCase() === 'verified' ? (
+                                  <CheckCircle size={14} className="text-green-600" />
+                                ) : null}
+                                <span className="truncate">{rowData.verify || ''}</span>
+                              </div>
+                              <span className="text-gray-300">|</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const famId = (rowData as any).family_id || (rowData as any).division_id || '';
+                                  openFamilyModal(String(famId));
+                                }}
+                                className="p-1 rounded hover:bg-gray-100 cursor-pointer"
+                                title="View family members"
+                              >
+                                <Eye size={16} className="text-gray-700" />
+                              </button>
+                            </div>
+                          )
+                      : undefined
+                  }
                 />
+                )
               )}
             </td>
           ))}
@@ -1916,11 +2471,12 @@ function DataTable({
       }
     }
     
-    // Add detailed filters to API call
+    // Add detailed filters to API call (with DOB formatting)
     if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
       Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
         if (value && value !== '') {
-          apiUrl += `&${key}=${encodeURIComponent(String(value))}`;
+          const val = key === 'dateOfBirth' ? formatDateForBackend(String(value)) : String(value);
+          apiUrl += `&${key}=${encodeURIComponent(val)}`;
         }
       });
     }
@@ -1929,31 +2485,58 @@ function DataTable({
     
     fetch(apiUrl)
       .then(res => res.json())
-      .then((apiData: any[]) => {
-        const mappedData: Voter[] = apiData.map((item: any, index: number) => ({
+      .then(async (apiData: any[]) => {
+        let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
           id: String(item.id ?? index + 1),
           division_id: String(item.temp_family_Id || item.temp_family_id || ''),
+          family_id: item.family_id || '',
+          cast_name: item.caste || '',
           name: item.name || '',
           fname: item.father_name || '',
           mname: item.mother_name || '',
           surname: (() => {
             const name = item.name || '';
             const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
-            return nameParts.length > 1 ? nameParts.pop() : '';  // ✅ Only show surname if multiple words
+            return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
           })(),
           mobile1: item.mobile_number ? String(item.mobile_number) : '',
           mobile2: '',
           age: calculateAge(item.date_of_birth),
           date_of_birth: item.date_of_birth || '',
-          parliament: '', // Not available in area_mapping
-          assembly: '', // Not available in area_mapping
+          parliament: item.parliament || '', // ✅ FIXED: Read from database
+          assembly: item.assembly || '',     // ✅ FIXED: Read from database
           district: item.district || '',
           block: item.block || '',
           tehsil: item.gp || '',
           village: item.village || '',
+          gender: item.gender || '',
+          address: item.address || '',
+          verify: item.verify || '',
+          family_view: item.family_view || '',
+          caste_category: item.caste_category || '',
+          religion: item.religion || item.minority_religion || '',
           cast_id: item.caste || '',
           cast_ida: item.caste_category || ''
         }));
+        try {
+          const pairs = Array.from(new Set(mappedData.map(r => JSON.stringify({ district: r.district, block: r.block })))).map(s => JSON.parse(s));
+          if (pairs.length > 0) {
+            const resMap = await fetch('http://localhost:5002/api/resolve-ac-codes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pairs })
+            });
+            if (resMap.ok) {
+              const mapping = await resMap.json();
+              const norm = (v: any) => String(v ?? '').trim().toUpperCase();
+              mappedData = mappedData.map(row => {
+                const key = norm(row.district) + '|' + norm(row.block);
+                const acCode = mapping[key];
+                return acCode ? { ...row, assembly: String(acCode) } : row;
+              });
+            }
+          }
+        } catch {}
         setData(mappedData);
       })
       .catch(error => {
@@ -1973,6 +2556,13 @@ function DataTable({
       'block': 'block',
       'tehsil': 'gp',
       'village': 'village',
+      'gender': 'gender',
+      'family_id': 'family_id',
+      'address': 'address',
+      'verify': 'verify',
+      'family_view': 'family_view',
+      'caste_category': 'caste_category',
+      'religion': 'minority_religion',
       'cast_id': 'caste',
       'cast_ida': 'caste_category'
     };
@@ -2115,6 +2705,61 @@ function DataTable({
 
   return (
     <div className="bg-white h-screen w-full overflow-hidden relative" style={{ border: '1px solid #d1d5db' }}>
+      {/* Family Members Modal */}
+      {isFamilyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-transparent backdrop-blur-[1px] backdrop-brightness-90">
+          <div className="bg-white rounded shadow-lg w-[90vw] max-w-5xl max-h-[80vh] overflow-auto">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <div className="text-sm font-semibold text-gray-800">Family Members • Family ID: {familyModalFamilyId}</div>
+              <button onClick={closeFamilyModal} className="px-2 py-1 text-sm border rounded hover:bg-gray-100">Close</button>
+            </div>
+            <div className="p-4">
+              {familyLoading ? (
+                <div className="flex items-center text-sm text-gray-600"><span className="animate-spin inline-block w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full mr-2"></span>Loading...</div>
+              ) : familyError ? (
+                <div className="text-sm text-red-600">{familyError}</div>
+              ) : familyMembers.length === 0 ? (
+                <div className="text-sm text-gray-600">No members found for this Family ID.</div>
+              ) : (
+                <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr className="bg-gray-100 text-xs text-gray-700">
+                      <th className="border px-2 py-1 text-left">Sr.</th>
+                      <th className="border px-2 py-1 text-left">Name</th>
+                      <th className="border px-2 py-1 text-left">Father</th>
+                      <th className="border px-2 py-1 text-left">Mother</th>
+                      <th className="border px-2 py-1 text-left">Gender</th>
+                      <th className="border px-2 py-1 text-left">Mobile</th>
+                      <th className="border px-2 py-1 text-left">Village</th>
+                      <th className="border px-2 py-1 text-left">GP</th>
+                      <th className="border px-2 py-1 text-left">District</th>
+                      <th className="border px-2 py-1 text-left">Assembly</th>
+                      <th className="border px-2 py-1 text-left">Parliament</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {familyMembers.map((m, i) => (
+                      <tr key={`fm-${i}`} className="text-xs">
+                        <td className="border px-2 py-1">{i + 1}</td>
+                        <td className="border px-2 py-1">{m.name}</td>
+                        <td className="border px-2 py-1">{m.fname}</td>
+                        <td className="border px-2 py-1">{m.mname}</td>
+                        <td className="border px-2 py-1">{m.gender}</td>
+                        <td className="border px-2 py-1">{m.mobile1}</td>
+                        <td className="border px-2 py-1">{m.village}</td>
+                        <td className="border px-2 py-1">{m.tehsil}</td>
+                        <td className="border px-2 py-1">{m.district}</td>
+                        <td className="border px-2 py-1">{m.assembly}</td>
+                        <td className="border px-2 py-1">{m.parliament}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Excel-like DataGrid */}
       <div className="h-full w-full overflow-auto pb-16" ref={tableRef}>
         <table className="border-collapse w-full" style={{ borderSpacing: 0, tableLayout: 'fixed' }}>
@@ -2124,13 +2769,20 @@ function DataTable({
               {table.getHeaderGroups()[0]?.headers.map((header) => (
                 <th
                   key={header.id}
-                  className="bg-gray-100 border-r border-gray-300 border-b border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wide select-none hover:bg-gray-200"
+                  className="bg-gray-100 border-r border-gray-300 border-b border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wide select-none hover:bg-gray-200 relative"
                   style={{ 
-                    width: header.getSize(),
-                    minWidth: header.getSize(),
+                    width: (() => {
+                      const colId = header.column.id as string;
+                      return columnSizes[colId] || header.getSize();
+                    })(),
+                    minWidth: (() => {
+                      const colId = header.column.id as string;
+                      return columnSizes[colId] || header.getSize();
+                    })(),
                     position: 'sticky',
                     top: 0,
-                    zIndex: 10
+                    zIndex: 10,
+                    ...(header.column.id === 'select' ? { left: 0, zIndex: 20 } : {})
                   }}
                 >
                   {header.isPlaceholder
@@ -2139,6 +2791,18 @@ function DataTable({
                         header.column.columnDef.header,
                         header.getContext()
                       )}
+                  {/* Column resizer */}
+                  <div
+                    onMouseDown={(e) => startColumnResize(e, header.column.id as string)}
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: 0,
+                      width: '6px',
+                      height: '100%',
+                      cursor: 'col-resize'
+                    }}
+                  />
                 </th>
               ))}
             </tr>
@@ -2186,6 +2850,13 @@ function DataTable({
                     )}
                   </div>
                 ) : null}
+                {/* Show filter loading indicator */}
+                {filterLoading && (
+                  <div className="mt-1 text-xs text-orange-600">
+                    <span className="animate-spin inline-block w-3 h-3 border-2 border-orange-600 border-t-transparent rounded-full mr-1"></span>
+                    Updating filters...
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2322,10 +2993,9 @@ function DataTable({
                 className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 disabled={loading}
               >
+                <option value={100}>100</option>
+                <option value={250}>250</option>
                 <option value={500}>500</option>
-                <option value={1000}>1000</option>
-                <option value={2000}>2000</option>
-                <option value={5000}>5000</option>
               </select>
             </div>
           </div>

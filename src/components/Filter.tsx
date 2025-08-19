@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, ChevronDown, ChevronUp, Search, Play } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, Search, Play, RefreshCw } from 'lucide-react';
 import { apiService } from '../services/api';
 
 interface FilterProps {
@@ -434,6 +434,8 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
 
     // Apply filters only when Go button is clicked
     onFilterChange(cleanFilters);
+    // Notify master filter that filter section applied
+    window.dispatchEvent(new CustomEvent('filter-section-applied'));
   };
 
   const clearAllFilters = () => {
@@ -456,6 +458,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
     
     // Apply empty filters
     onFilterChange({});
+    window.dispatchEvent(new CustomEvent('filter-section-cleared'));
   };
 
   const hasActiveFilters = villageNameFilter || 
@@ -572,18 +575,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
 
             {/* Buttons on Right Side */}
             <div className="flex items-center space-x-3 flex-shrink-0">
-              <div className="flex items-center space-x-3">
-                {hasActiveFilters && (
-                  <button
-                    onClick={clearAllFilters}
-                    className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all duration-200"
-                    disabled={loading}
-                  >
-                    <X size={16} />
-                    <span>Clear All</span>
-                  </button>
-                )}
-              </div>
+              
 
               {/* Show More/Less Button */}
               <button
@@ -604,17 +596,6 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 )}
               </button>
 
-              {/* Refresh Filter Options Button */}
-              <button
-                onClick={refreshFilterOptions}
-                className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium text-sm cursor-pointer"
-                disabled={loading}
-                title="Refresh filter options based on current selections"
-              >
-                🔄
-                <span>Refresh</span>
-              </button>
-
               {/* Go Button */}
               <button
                 onClick={handleApplyFilters}
@@ -623,6 +604,43 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
               >
                 <Play size={16} />
                 <span>Go</span>
+              </button>
+
+              {/* Refresh Button */}
+              <button
+                onClick={() => {
+                  // Clear all filters
+                  setvillageNameFilter('');
+                  setgramPanchayatFilter('');
+                  setnameFilter('');
+                  setfnameFilter('');
+                  setmotherNameFilter('');
+                  setsurnameFilter('');
+                  setcastIdFilter('');
+                  setcastTypeFilter('');
+                  setmobile1Filter('');
+                  setmobile2Filter('');
+                  setdobFilter('');
+                  setageFromFilter('');
+                  setageToFilter('');
+                  setmalefemaleFilter('');
+                  setreligionFilter('');
+                  setcategoryFilter('');
+                  
+                  // Clear applied filters
+                  onFilterChange({});
+                  
+                  // Refresh filter options
+                  refreshFilterOptions();
+                  
+                  // Trigger DataTable refresh event
+                  window.dispatchEvent(new CustomEvent('refreshDataTable'));
+                }}
+                className="flex items-center justify-center p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors duration-200 cursor-pointer"
+                disabled={loading}
+                title="Refresh filters"
+              >
+                <RefreshCw size={16} />
               </button>
             </div>
           </div>
