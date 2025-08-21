@@ -11,6 +11,7 @@ interface MasterFilterProps {
     district: string;
     block: string;
   }) => void;
+  hasData?: boolean; // Add prop to check if data is available
 }
 
 // Filter preset interface
@@ -157,7 +158,7 @@ function SearchableSelect({
   );
 }
 
-export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps) {
+export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFilterProps) {
   const [parliament, setParliament] = useState(''); // stores ID (PC_ID)
   const [assembly, setAssembly] = useState(''); // stores ID (AC_ID)
   const [parliamentLabel, setParliamentLabel] = useState(''); // displays Hindi name
@@ -176,6 +177,11 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
   const [appliedFilters, setAppliedFilters] = useState({ parliament: '', assembly: '', district: '', block: '' });
   const [exportFormat, setExportFormat] = useState<'csv' | 'excel' | 'pdf'>('csv');
   const [showExportDropdown, setShowExportDropdown] = useState(false);
+  
+  // Save notification state
+  const [showSaveNotification, setShowSaveNotification] = useState(false);
+  const [saveNotificationMessage, setSaveNotificationMessage] = useState('');
+  const [saveNotificationType, setSaveNotificationType] = useState<'success' | 'error'>('success');
 
   // State for dropdown options
   const [parliamentOptions, setParliamentOptions] = useState<string[]>([]); // labels (Hindi)
@@ -418,6 +424,95 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
     alert('🔓 Lock state cleared. All filters are now unlocked.');
   };
 
+  // Show save notification (renamed to avoid collision with state variable)
+  const triggerSaveNotification = (message: string, type: 'success' | 'error' = 'success') => {
+    setSaveNotificationMessage(message);
+    setSaveNotificationType(type);
+    setShowSaveNotification(true);
+    
+    // Auto-hide after 4 seconds
+    setTimeout(() => {
+      setShowSaveNotification(false);
+    }, 4000);
+  };
+
+  // Save current filters
+  const handleSaveFilters = async () => {
+    // Check if any filters are selected
+    const hasFilters = parliament || assembly || district || block;
+    if (!hasFilters) {
+      triggerSaveNotification('⚠️ Please select at least one filter before saving.', 'error');
+      return;
+    }
+
+    try {
+      // Create a unique name for the saved filter
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filterName = `Filters_${timestamp}_${Date.now()}`;
+      
+      // Prepare filter data
+      const filterData = {
+        name: filterName,
+        filters: {
+          parliament: parliament || '',
+          assembly: assembly || '',
+          district: district || '',
+          block: block || ''
+        },
+        createdAt: new Date().toISOString()
+      };
+
+      // Save to backend API
+      const response = await fetch('http://localhost:5002/api/filter-presets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(filterData),
+      });
+
+      if (response.ok) {
+        const savedData = await response.json();
+        
+        // Also save to localStorage for offline access
+        const localData = {
+          id: savedData.id || Date.now().toString(),
+          ...filterData,
+          createdAt: new Date(filterData.createdAt)
+        };
+        
+        const updatedPresets = [...savedPresets, localData];
+        setSavedPresets(updatedPresets);
+        localStorage.setItem('filterPresets', JSON.stringify(updatedPresets));
+        
+        triggerSaveNotification(`✅ Filters saved successfully! Name: ${filterName}`, 'success');
+      } else {
+        throw new Error('Failed to save to backend');
+      }
+    } catch (error) {
+      console.error('Error saving filters:', error);
+      
+      // Fallback to localStorage only
+      const filterData = {
+        id: Date.now().toString(),
+        name: `Filters_${new Date().toISOString().split('T')[0]}_${Date.now()}`,
+        filters: {
+          parliament: parliament || '',
+          assembly: assembly || '',
+          district: district || '',
+          block: block || ''
+        },
+        createdAt: new Date()
+      };
+      
+      const updatedPresets = [...savedPresets, filterData];
+      setSavedPresets(updatedPresets);
+      localStorage.setItem('filterPresets', JSON.stringify(updatedPresets));
+      
+      triggerSaveNotification('✅ Filters saved to local storage!', 'success');
+    }
+  };
+
   // Handle export functionality
   const handleExport = async (format: 'csv' | 'excel' | 'pdf') => {
     if (!(parliament || assembly || district || block)) {
@@ -578,20 +673,28 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
         <div className="flex items-center space-x-3">
           {/* Save Button */}
           <button
-            onClick={() => console.log('Save clicked')}
-            className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px] h-[40px]"
-            disabled={!(appliedFilters.parliament || appliedFilters.assembly || appliedFilters.district || appliedFilters.block)}
+            onClick={handleSaveFilters}
+            className={`px-3 py-2 rounded-lg transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px] h-[40px] ${
+              hasActiveFilters 
+                ? 'bg-gray-600 text-white hover:bg-gray-700' 
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+            disabled={!hasActiveFilters}
           >
             <Save size={16} />
             <span>Save</span>
           </button>
-          
-          {/* Export Button with Format Selection */}
+
+          {/* Export Button */}
           <div className="relative">
             <button
               onClick={() => setShowExportDropdown(!showExportDropdown)}
-              className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed min-w-[90px] h-[40px]"
-              disabled={!(appliedFilters.parliament || appliedFilters.assembly || appliedFilters.district || appliedFilters.block) || isExporting}
+              className={`px-3 py-2 rounded-lg transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px] h-[40px] ${
+                (hasActiveFilters || hasData)
+                  ? 'bg-gray-600 text-white hover:bg-gray-700' 
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+              disabled={!(hasActiveFilters || hasData)}
             >
               <Download size={16} />
               <span className="text-xs">{isExporting ? 'Exporting...' : 'Export'}</span>
@@ -631,10 +734,10 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
             onClick={toggleLock}
             className={`px-3 py-2 rounded-lg transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px] h-[40px] ${
               isLocked 
-                ? 'bg-red-600 text-white hover:bg-red-700' 
+                ? 'bg-gray-600 text-white hover:bg-gray-700' 
                 : 'bg-gray-600 text-white hover:bg-gray-700'
             }`}
-            disabled={!(appliedFilters.parliament || appliedFilters.assembly || appliedFilters.district || appliedFilters.block)}
+            disabled={!(hasActiveFilters || hasData)}
           >
             {isLocked ? <Unlock size={16} /> : <Lock size={16} />}
             <span>{isLocked ? 'Unlock' : 'Lock'}</span>
@@ -642,26 +745,58 @@ export default function MasterFilter({ onMasterFilterChange }: MasterFilterProps
         </div>
       </div>
 
-      {/* Lock Status Indicator */}
-      {isLocked && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Lock size={16} className="text-yellow-600" />
-              <span className="text-yellow-800 text-sm font-medium">
-                🔒 Filters are locked! Your data is protected. You can navigate to other pages and return to find the same filters.
-              </span>
-            </div>
-            <button
-              onClick={clearLockState}
-              className="px-3 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 border border-yellow-300"
-              title="Clear lock state"
-            >
-              Clear Lock
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+             {/* Lock Status Indicator */}
+       {isLocked && (
+         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+           <div className="flex items-center justify-between">
+             <div className="flex items-center space-x-2">
+               <Lock size={16} className="text-yellow-600" />
+               <span className="text-yellow-800 text-sm font-medium">
+                 🔒 Filters are locked! Your data is protected. You can navigate to other pages and return to find the same filters.
+               </span>
+             </div>
+             <button
+               onClick={clearLockState}
+               className="px-3 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 border border-yellow-300"
+               title="Clear lock state"
+             >
+               Clear Lock
+             </button>
+           </div>
+         </div>
+       )}
+
+       {/* Save Notification Popup - Right Side */}
+       {showSaveNotification && (
+         <div className="fixed top-4 right-4 z-50 max-w-sm">
+           <div className={`rounded-lg shadow-lg p-4 border-l-4 ${
+             saveNotificationType === 'success' 
+               ? 'bg-green-50 border-green-400 text-green-800' 
+               : 'bg-red-50 border-red-400 text-red-800'
+           }`}>
+             <div className="flex items-start space-x-3">
+               <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
+                 saveNotificationType === 'success' ? 'bg-green-400' : 'bg-red-400'
+               }`}>
+                 {saveNotificationType === 'success' ? (
+                   <span className="text-white text-xs">✓</span>
+                 ) : (
+                   <span className="text-white text-xs">⚠</span>
+                 )}
+               </div>
+               <div className="flex-1">
+                 <p className="text-sm font-medium">{saveNotificationMessage}</p>
+               </div>
+               <button
+                 onClick={() => setShowSaveNotification(false)}
+                 className="flex-shrink-0 text-gray-400 hover:text-gray-600"
+               >
+                 <span className="text-lg">×</span>
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
+     </div>
+   );
+ }

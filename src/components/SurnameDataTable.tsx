@@ -12,11 +12,20 @@ import {
 // Interface for surname data
 export interface SurnameData {
   id: number;
+  name?: string; // Make name field optional since backend might not always return it
   surname: string;
   count: number;
   castId: string;
   castIda: string;
 }
+
+// Helper function to extract surname from name (last word)
+const extractSurname = (name: string): string => {
+  if (!name) return '';
+  const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
+  // Only show surname if multiple words, otherwise blank
+  return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+};
 
 // Excel-like Cell Component for Surname Table
 interface SurnameExcelCellProps {
@@ -186,23 +195,15 @@ const SurnameExcelCell = memo(function SurnameExcelCell({
 const columns: ColumnDef<SurnameData>[] = [
   {
     id: 'select',
-    header: 'Sr. No.',
+    header: 'Sr.',
     cell: ({ row }) => (
-      <div className="flex items-center space-x-2 bg-gray-200 px-2 py-1">
-        <span className="text-gray-800 font-medium">{row.index + 1}</span>
+      <div className="flex items-center justify-center bg-gray-100 px-1 py-1 h-full">
+        <span className="text-gray-700 font-medium text-xs">{row.index + 1}</span>
       </div>
     ),
-    size: 80,
-  },
-  {
-    accessorKey: 'surname',
-    header: 'Surname',
-    size: 200,
-  },
-  {
-    accessorKey: 'count',
-    header: 'Count',
-    size: 120,
+    size: 50,
+    minSize: 50,
+    maxSize: 50,
   },
   {
     accessorKey: 'castId',
@@ -214,15 +215,43 @@ const columns: ColumnDef<SurnameData>[] = [
     header: 'Cast IDA',
     size: 150,
   },
+  {
+    accessorKey: 'surname',
+    header: 'Surname',
+    size: 200,
+  },
+  {
+    accessorKey: 'count',
+    header: 'Count',
+    size: 120,
+  },
 ];
 
 interface SurnameDataTableProps {
   data: SurnameData[];
   loading: boolean;
   onUpdateSurname: (id: number, surnameData: Partial<SurnameData>) => Promise<void>;
+  // Pagination props
+  pagination?: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number | string;
+    itemsPerPage: number;
+  };
+  onPageChange?: (page: number) => void;
+  onItemsPerPageChange?: (itemsPerPage: number) => void;
+  showPagination?: boolean;
 }
 
-export default function SurnameDataTable({ data, loading, onUpdateSurname }: SurnameDataTableProps) {
+export default function SurnameDataTable({ 
+  data, 
+  loading, 
+  onUpdateSurname,
+  pagination,
+  onPageChange,
+  onItemsPerPageChange,
+  showPagination = false
+}: SurnameDataTableProps) {
   // Excel-like state management
   const [selectedCell, setSelectedCell] = useState<{row: number, column: string} | null>(null);
   const [editingCell, setEditingCell] = useState<{row: number, column: string} | null>(null);
@@ -535,8 +564,9 @@ export default function SurnameDataTable({ data, loading, onUpdateSurname }: Sur
 
   // Pre-compute the table body
   const tableBody = useMemo(() => {
-    const maxVisibleRows = Math.max(15, data?.length || 15);
-    const totalRows = loading ? maxVisibleRows : Math.max(maxVisibleRows, data?.length || 0);
+    // Show only first 100 rows by default, let pagination handle the rest
+    const maxVisibleRows = 100;
+    const totalRows = loading ? maxVisibleRows : Math.min(maxVisibleRows, data?.length || 0);
     
     return Array.from({ length: totalRows }).map((_, index) => {
       const isDataRow = !loading && data && index < data.length;
@@ -561,9 +591,11 @@ export default function SurnameDataTable({ data, loading, onUpdateSurname }: Sur
                   value={
                     columnId === 'select' 
                       ? index + 1 
-                      : isDataRow && rowData 
-                        ? (rowData[columnId as keyof SurnameData] || '') 
-                        : ''
+                      : columnId === 'surname' && isDataRow && rowData
+                        ? extractSurname(rowData.name || '') // Extract surname from name, handle optional field
+                        : isDataRow && rowData 
+                          ? (rowData[columnId as keyof SurnameData] || '') 
+                          : ''
                   }
                   rowIndex={index}
                   columnId={columnId}
@@ -594,6 +626,22 @@ export default function SurnameDataTable({ data, loading, onUpdateSurname }: Sur
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <div className="text-gray-600">Loading surname data...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show message when no data is available
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="text-center">
+          <div className="text-gray-400 text-6xl mb-4">🔍</div>
+          <div className="text-gray-600 text-lg font-medium mb-2">No Filters Selected</div>
+          <div className="text-gray-500 mb-4">Please select filters and click "Go" to view surname data</div>
+          <div className="text-sm text-gray-400">
+            Select one or more filters (Name, Father's Name, Mother's Name) and click "Go" to get started
+          </div>
         </div>
       </div>
     );
@@ -639,14 +687,142 @@ export default function SurnameDataTable({ data, loading, onUpdateSurname }: Sur
 
       {/* Grid Footer */}
       <div className="bg-gray-50 px-6 py-3 border-t border-gray-200 absolute bottom-0 left-0 right-0">
-        <div className="flex justify-between items-center text-sm text-gray-700">
-          <div>
-            Showing {data?.length || 0} surname entries
+        {showPagination && pagination && onPageChange && onItemsPerPageChange ? (
+          <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-gray-700 space-y-2 sm:space-y-0 mr-10">
+            <div className="text-center sm:text-left">
+              <div className="text-sm">
+                <span className="font-medium">Page {pagination.currentPage}</span>
+                {typeof pagination.totalItems === 'number' ? (
+                  <span> of {pagination.totalPages} • </span>
+                ) : (
+                  <span> • </span>
+                )}
+                <span>Showing {data?.length || 0} surname entries</span>
+                {typeof pagination.totalItems === 'string' && (
+                  <span> (Total: {pagination.totalItems})</span>
+                )}
+              </div>
+            </div>
+            
+            {/* Centered Pagination */}
+            <div className="flex items-center justify-center space-x-1">
+              {/* Previous page button */}
+              <button 
+                className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 cursor-pointer"
+                onClick={() => onPageChange(pagination.currentPage - 1)}
+                disabled={pagination.currentPage <= 1 || loading}
+                title="Previous"
+              >
+                &lt;
+              </button>
+            
+              {/* Page numbers with ellipsis */}
+              {(() => {
+                const pages = [];
+                
+                if (pagination.totalPages <= 5) {
+                  // If total pages is 5 or less, show all pages
+                  for (let i = 1; i <= pagination.totalPages; i++) {
+                    pages.push(i);
+                  }
+                } else {
+                  // Show first 5 pages
+                  for (let i = 1; i <= 5; i++) {
+                    pages.push(i);
+                  }
+                  
+                  // Add ellipsis
+                  pages.push('...');
+                  
+                  // Add total pages
+                  pages.push(pagination.totalPages);
+                }
+                
+                return pages.map((page, index) => (
+                  <div key={index}>
+                    {page === '...' ? (
+                      <span className="px-2 py-1 text-gray-400 cursor-pointer">......</span>
+                    ) : (
+                      <button
+                        className={`px-3 py-1 rounded transition-colors ${
+                          page === pagination.currentPage
+                            ? 'bg-gray-600 text-white cursor-pointer'
+                            : 'border border-gray-300 hover:bg-gray-100 text-gray-700 cursor-pointer '
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        onClick={() => onPageChange(page as number)}
+                        disabled={loading}
+                      >
+                        {page}
+                      </button>
+                    )}
+                  </div>
+                ));
+              })()}
+              
+              {/* Next page icon > */}
+              <button 
+                className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 cursor-pointer"
+                onClick={() => onPageChange(pagination.currentPage + 1)}
+                disabled={pagination.currentPage >= pagination.totalPages || loading}
+                title="Next page"
+              >
+                &gt;
+              </button>
+              
+              {/* Go to Page input */}
+              <div className="flex items-center space-x-1 ml-2 cursor-pointer">
+                <span className="text-xs text-gray-600">Go to:</span>
+                <input
+                  type="number"
+                  min="1"
+                  max={pagination.totalPages}
+                  defaultValue={pagination.currentPage}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const page = parseInt((e.target as HTMLInputElement).value);
+                      if (page >= 1 && page <= pagination.totalPages) {
+                        onPageChange(page);
+                      }
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const page = parseInt((e.target as HTMLInputElement).value);
+                    if (page >= 1 && page <= pagination.totalPages) {
+                      onPageChange(page);
+                    }
+                  }}
+                  className="w-16 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
+                />
+                <span className="text-xs text-gray-500">of {pagination.totalPages}</span>
+              </div>
+              
+              {/* Items per page dropdown */}
+              <div className="flex items-center space-x-1 ml-2">
+                <span className="text-xs text-gray-600">Show:</span>
+                <select
+                  value={pagination.itemsPerPage}
+                  onChange={(e) => onItemsPerPageChange(parseInt(e.target.value))}
+                  className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  disabled={loading}
+                >
+                  <option value={100}>100</option>
+                  <option value={250}>250</option>
+                  <option value={500}>500</option>
+                </select>
+              </div>
+            </div>
           </div>
-          <div className="text-gray-500">
-            Total Surnames: {data?.length || 0}
+        ) : (
+          <div className="flex justify-between items-center text-sm text-gray-700">
+            <div>
+              Showing {data?.length || 0} surname entries
+            </div>
+            <div className="text-gray-500">
+              Total Surnames: {data?.length || 0}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

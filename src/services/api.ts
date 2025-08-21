@@ -41,6 +41,7 @@ export interface Voter {
 
 export interface SurnameData {
   id: number;
+  name?: string; // Make name field optional since backend might not always return it
   surname: string;
   count: number;
   castId: string;
@@ -401,13 +402,22 @@ class ApiService {
     return this.handleResponse<{ message: string }>(response);
   }
 
-  // Surname data
-  async getSurnameData(filters: { name?: string; fname?: string; mname?: string } = {}): Promise<SurnameData[]> {
-    const params = new URLSearchParams(
-      Object.fromEntries(
-        Object.entries(filters).filter(([_, value]) => value !== undefined && value !== '')
-      )
-    );
+  // Surname data (supports master filters as well)
+  async getSurnameData(filters: {
+    name?: string;
+    fname?: string;
+    mname?: string;
+    parliament?: string;
+    assembly?: string;
+    district?: string;
+    block?: string;
+    count?: number | string;
+    sources?: string; // comma-separated: name,fname,mname
+  } = {}): Promise<SurnameData[]> {
+    const entries = Object.entries(filters)
+      .filter(([_, value]) => value !== undefined && value !== '')
+      .map(([key, value]) => [key, String(value)] as [string, string]);
+    const params = new URLSearchParams(entries);
 
     const response = await fetch(`${API_BASE_URL}/surname-data?${params}`);
     return this.handleResponse<SurnameData[]>(response);

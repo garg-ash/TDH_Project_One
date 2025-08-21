@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User, BarChart3, FileText, Users, Gem, ArrowLeftRight, BookOpen, ChevronDown } from 'lucide-react';
+import { User, BarChart3, FileText, Users, Gem, ArrowLeftRight, BookOpen, ChevronDown, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../contexts/AuthContext';
 import logo from '/Next/public/logo.png';
 
 
@@ -10,6 +11,7 @@ export default function Navbar() {
   const router = useRouter();
   const [dataProcessDropdown, setDataProcessDropdown] = useState(false);
   const [currentPath, setCurrentPath] = useState('/');
+  const { user, logout, loading } = useAuth();
   
   // Track current pathname for active menu indication
   useEffect(() => {
@@ -261,15 +263,35 @@ export default function Navbar() {
             </button>
           </div>
 
-          {/* User Profile */}
+          {/* User Profile (Right Side) */}
           <div className="flex items-center space-x-3">
-            <div className="hidden sm:flex items-center space-x-2 text-gray-600">
-              <User size={18} className="text-gray-500" />
-              <span className="font-medium text-sm">Ashish Garg</span>
-            </div>
-            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-              <User size={16} className="text-gray-600" />
-            </div>
+            {loading ? null : user ? (
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                  <span className="text-sm font-medium text-gray-700">
+                    {(user.username || user.email).charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="hidden sm:flex flex-col">
+                  <span className="text-sm font-medium text-gray-900">{user.username || user.email}</span>
+                  <span className="text-xs text-gray-500 capitalize">{user.role}</span>
+                </div>
+                <button
+                  onClick={logout}
+                  className="hidden sm:inline-flex items-center px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded"
+                  title="Logout"
+                >
+                  <LogOut size={14} className="mr-1" /> Logout
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => router.push('/login')}
+                className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+              >
+                Login
+              </button>
+            )}
           </div>
         </div>
 

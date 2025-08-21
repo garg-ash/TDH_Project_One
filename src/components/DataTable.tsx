@@ -1,7 +1,7 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
+import CommonPagination from './CommonPagination';
 
 // Add CSS for copy blink effect
 const copyBlinkCSS = `
@@ -35,22 +35,7 @@ const copyBlinkCSS = `
   }
 `;
 
-// Inject CSS with better error handling
-if (typeof document !== 'undefined') {
-  try {
-    // Check if style already exists
-    let existingStyle = document.getElementById('copy-blink-css');
-    if (!existingStyle) {
-      const style = document.createElement('style');
-      style.id = 'copy-blink-css';
-      style.textContent = copyBlinkCSS;
-      document.head.appendChild(style);
-      console.log('✅ Copy blink CSS injected successfully');
-    }
-  } catch (error) {
-    console.error('❌ Failed to inject copy blink CSS:', error);
-  }
-}
+// CSS injection moved into component useEffect to avoid SSR hydration mismatches
 import {
   useReactTable,
   getCoreRowModel,
@@ -347,18 +332,18 @@ const columns: ColumnDef<Voter>[] = [
   },
   {
     accessorKey: 'division_id',
-    header: 'Temp Family ID',
-    size: 120,
-  },
-  {
-    accessorKey: 'family_id',
     header: 'Family ID',
     size: 120,
   },
+  // {
+  //   accessorKey: 'family_id',
+  //   header: 'Family ID',
+  //   size: 120,
+  // },
   {
     accessorKey: 'name',
-    header: 'Name, Gender, Age',
-    size: 240,
+    header: 'Name   M/F  | Age',
+    size: 280,
   },
   {
     accessorKey: 'surname',
@@ -381,16 +366,16 @@ const columns: ColumnDef<Voter>[] = [
     header: 'DOB',
     size: 120,
   },
-  {
-    accessorKey: 'parliament',
-    header: 'Parliament No.',
-    size: 140,
-  },
-  {
-    accessorKey: 'assembly',
-    header: 'Assembly No.',
-    size: 140,
-  },
+  // {
+  //   accessorKey: 'parliament',
+  //   header: 'Parliament No.',
+  //   size: 140,
+  // },
+  // {
+  //   accessorKey: 'assembly',
+  //   header: 'Assembly No.',
+  //   size: 140,
+  // },
   {
     accessorKey: 'district',
     header: 'District',
@@ -403,12 +388,12 @@ const columns: ColumnDef<Voter>[] = [
   },
   {
     accessorKey: 'tehsil',
-    header: 'Gram Panchayat (GP)',
+    header: 'GP',
     size: 120,
   },
   {
     accessorKey: 'village',
-    header: 'Village',
+    header: 'GRAM',
     size: 140,
   },
   // Removed separate Gender column: will display under Name
@@ -419,7 +404,7 @@ const columns: ColumnDef<Voter>[] = [
   },
   {
     accessorKey: 'verify',
-    header: 'Verify / Fview',
+    header: 'Status',
     size: 100,
   },
   {
@@ -509,10 +494,34 @@ function DataTable({
   masterFilters?: { parliament?: string; assembly?: string; district?: string; block?: string };
   detailedFilters?: any;
 }) {
+  // Inject CSS on client after mount to avoid hydration mismatch
+  useEffect(() => {
+    try {
+      if (typeof document === 'undefined') return;
+      const existingStyle = document.getElementById('copy-blink-css');
+      if (!existingStyle) {
+        const style = document.createElement('style');
+        style.id = 'copy-blink-css';
+        style.textContent = copyBlinkCSS;
+        document.head.appendChild(style);
+      }
+    } catch (error) {
+      console.error('Failed to inject copy blink CSS:', error);
+    }
+  }, []);
   // Use filters directly to prevent unnecessary memoization issues
   const memoizedMasterFilters = masterFilters;
   const memoizedDetailedFilters = detailedFilters;
   
+  // Hoisted helper to check if any filters are active (safe for deps)
+  function hasActiveFilters(): boolean {
+    const master = memoizedMasterFilters || {} as any;
+    const detailed = memoizedDetailedFilters || {} as any;
+    const hasMaster = Object.values(master).some((val: any) => val && val !== '');
+    const hasDetailed = Object.values(detailed).some((val: any) => val && val !== '');
+    return hasMaster || hasDetailed;
+  }
+
   const [data, setData] = useState<Voter[]>([]);
   const [pagination, setPagination] = useState<{
     currentPage: number;
@@ -525,7 +534,6 @@ function DataTable({
     totalItems: 0,
     totalPages: 0,
   });
-  const [goToPageInput, setGoToPageInput] = useState<string>('1');
   const [loading, setLoading] = useState(true);
   const [filterLoading, setFilterLoading] = useState(false); // Separate loading state for filters
   const [error, setError] = useState<string | null>(null);
@@ -962,6 +970,17 @@ function DataTable({
 
   // Pagination handlers - handlePageChange function
   const handlePageChange = useCallback(async (page: number, isFilterChange: boolean = false) => {
+    // Guard: do not fetch when no filters are active
+    if (!hasActiveFilters()) {
+      if (!isFilterChange) {
+        setLoading(false);
+      } else {
+        setFilterLoading(false);
+      }
+      setData([]);
+      setPagination(prev => ({ ...prev, currentPage: 1, totalItems: 0, totalPages: 0 }));
+      return;
+    }
     if (page < 1 || page > pagination.totalPages) return;
     
     // Update pagination state
@@ -1169,6 +1188,13 @@ function DataTable({
   }, [columnIds, pagination.totalPages, pagination.itemsPerPage, memoizedMasterFilters, memoizedDetailedFilters]);
 
   const handleItemsPerPageChange = useCallback(async (newItemsPerPage: number) => {
+    // Guard: if no filters, keep table empty
+    if (!hasActiveFilters()) {
+      setPagination(prev => ({ ...prev, itemsPerPage: newItemsPerPage, currentPage: 1, totalItems: 0, totalPages: 0 }));
+      setData([]);
+      setLoading(false);
+      return;
+    }
     setPagination(prev => ({ 
       ...prev, 
       itemsPerPage: newItemsPerPage,
@@ -1357,179 +1383,194 @@ function DataTable({
     }
   }, [columnIds, memoizedMasterFilters, memoizedDetailedFilters]);
 
-  // Effect to fetch data on component mount
+  // Effect to fetch data on component mount - ONLY if filters are selected
   useEffect(() => {
-    // Only fetch on mount, don't set previous data for initial load
-    const initialFetch = async () => {
-      try {
-        setLoading(true);
-        
-        // Use pagination for better performance
-        const page = 1;
-        const limit = pagination.itemsPerPage;
-        
-        // Build API URL with filters
-        let apiUrl = `http://localhost:5002/api/area_mapping?page=${page}&limit=${limit}`;
-        
-        // Add master filters to API call
-        if (memoizedMasterFilters) {
-          if (memoizedMasterFilters.parliament) {
-            apiUrl += `&parliament=${encodeURIComponent(memoizedMasterFilters.parliament)}`;
-          }
-          if (memoizedMasterFilters.assembly) {
-            apiUrl += `&assembly=${encodeURIComponent(memoizedMasterFilters.assembly)}`;
-          }
-          if (memoizedMasterFilters.district) {
-            apiUrl += `&district=${encodeURIComponent(memoizedMasterFilters.district)}`;
-          }
-          if (memoizedMasterFilters.block) {
-            apiUrl += `&block=${encodeURIComponent(memoizedMasterFilters.block)}`;
-          }
-        }
-        
-        // Add detailed filters to API call
-        if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
-          Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
-            if (value && value !== '') {
-              apiUrl += `&${key}=${encodeURIComponent(String(value))}`;
-            }
-          });
-        }
-        
-        console.log('🔍 Initial fetch with filters:', { masterFilters: memoizedMasterFilters, detailedFilters: memoizedDetailedFilters, apiUrl });
-        
-        const response = await fetch(apiUrl);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ Initial fetch HTTP Error Response:', errorText);
-          throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-        }
-        
-        const rawData = await response.text();
-        
+    // Check if any filters are selected
+    const hasMasterFilters = memoizedMasterFilters && Object.values(memoizedMasterFilters).some(val => val && val !== '');
+    const hasDetailedFilters = memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0 && Object.values(memoizedDetailedFilters).some(val => val && val !== '');
+    
+    // Only fetch data if filters are selected
+    if (hasMasterFilters || hasDetailedFilters) {
+      const initialFetch = async () => {
         try {
-          const apiData = JSON.parse(rawData);
+          setLoading(true);
           
-          if (!Array.isArray(apiData)) {
-            throw new Error('API data is not an array');
+          // Use pagination for better performance
+          const page = 1;
+          const limit = pagination.itemsPerPage;
+          
+          // Build API URL with filters
+          let apiUrl = `http://localhost:5002/api/area_mapping?page=${page}&limit=${limit}`;
+          
+          // Add master filters to API call
+          if (memoizedMasterFilters) {
+            if (memoizedMasterFilters.parliament) {
+              apiUrl += `&parliament=${encodeURIComponent(memoizedMasterFilters.parliament)}`;
+            }
+            if (memoizedMasterFilters.assembly) {
+              apiUrl += `&assembly=${encodeURIComponent(memoizedMasterFilters.assembly)}`;
+            }
+            if (memoizedMasterFilters.district) {
+              apiUrl += `&district=${encodeURIComponent(memoizedMasterFilters.district)}`;
+            }
+            if (memoizedMasterFilters.block) {
+              apiUrl += `&block=${encodeURIComponent(memoizedMasterFilters.block)}`;
+            }
           }
           
-                  // Map API data to Voter interface (correct mapping for area_mapping API) - FIRST INSTANCE
-        let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
-          id: String(item.id ?? index + 1),
-          row_pk: typeof item.id === 'number' ? item.id : undefined,
-          division_id: String(item.temp_family_Id || item.temp_family_id || ''),
-            family_id: item.family_id || '',
-            cast_name: item.caste || '',
-            name: item.name || '',
-            fname: item.father_name || '',
-            mname: item.mother_name || '',
-            surname: (() => {
-              const name = item.name || '';
-              const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
-              // ✅ FIXED: Only show surname if multiple words, otherwise blank
-              return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
-            })(),
-            mobile1: item.mobile_number ? String(item.mobile_number) : '',
-            mobile2: '',
-            age: calculateAge(item.date_of_birth),
-            date_of_birth: item.date_of_birth || '',
-            parliament: item.parliament || '', // ✅ FIXED: Read from database
-            assembly: item.assembly || '',     // ✅ FIXED: Read from database
-            district: item.district || '',
-            block: item.block || '',
-            tehsil: item.gp || '',
-            village: item.village || '',
-            gender: item.gender || '',
-            address: item.address || '',
-            verify: item.verify || '',
-            family_view: item.family_view || '',
-            caste_category: item.caste_category || '',
-            religion: item.religion || item.minority_religion || '',
-            cast_id: item.caste || '',
-            cast_ida: item.caste_category || ''
-          }));
-
-          try {
-            const districts = Array.from(new Set(mappedData.map(r => r.district).filter(Boolean)));
-            if (districts.length > 0) {
-              const mapRes = await fetch(`http://localhost:5002/api/acpc-mapping?districts=${encodeURIComponent(districts.join(','))}`);
-              if (mapRes.ok) {
-                const mapping: Record<string, { pc_id: any; ac_id: any }> = await mapRes.json();
-                mappedData = mappedData.map(row => {
-                  const m = mapping[row.district];
-                  if (m) {
-                    return {
-                      ...row,
-                      parliament: row.parliament || (m.pc_id != null ? String(m.pc_id) : ''),
-                      assembly: row.assembly || (m.ac_id != null ? String(m.ac_id) : ''),
-                    };
-                  }
-                  return row;
-                });
+          // Add detailed filters to API call
+          if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
+            Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
+              if (value && value !== '') {
+                apiUrl += `&${key}=${encodeURIComponent(String(value))}`;
               }
+            });
+          }
+          
+          console.log('🔍 Initial fetch with filters:', { masterFilters: memoizedMasterFilters, detailedFilters: memoizedDetailedFilters, apiUrl });
+          
+          const response = await fetch(apiUrl);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Initial fetch HTTP Error Response:', errorText);
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+          }
+          
+          const rawData = await response.text();
+          
+          try {
+            const apiData = JSON.parse(rawData);
+            
+            if (!Array.isArray(apiData)) {
+              throw new Error('API data is not an array');
             }
-          } catch {}
-          
-          setData(mappedData);
-          
-          // Try to get total count from API response headers or check if we have more data
-          let totalCount: number | string = mappedData.length;
-          let totalPages = 1;
-          
-          // If we got exactly the limit, there might be more data
-          if (mappedData.length === pagination.itemsPerPage) {
-            // Try to fetch one more record to see if there's more data
+            
+            // Map API data to Voter interface (correct mapping for area_mapping API) - FIRST INSTANCE
+            let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
+              id: String(item.id ?? index + 1),
+              row_pk: typeof item.id === 'number' ? item.id : undefined,
+              division_id: String(item.temp_family_Id || item.temp_family_id || ''),
+              family_id: item.family_id || '',
+              cast_name: item.caste || '',
+              name: item.name || '',
+              fname: item.father_name || '',
+              mname: item.mother_name || '',
+              surname: (() => {
+                const name = item.name || '';
+                const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
+                // ✅ FIXED: Only show surname if multiple words, otherwise blank
+                return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+              })(),
+              mobile1: item.mobile_number ? String(item.mobile_number) : '',
+              mobile2: '',
+              age: calculateAge(item.date_of_birth),
+              date_of_birth: item.date_of_birth || '',
+              parliament: item.parliament || '', // ✅ FIXED: Read from database
+              assembly: item.assembly || '',     // ✅ FIXED: Read from database
+              district: item.district || '',
+              block: item.block || '',
+              tehsil: item.gp || '',
+              village: item.village || '',
+              gender: item.gender || '',
+              address: item.address || '',
+              verify: item.verify || '',
+              family_view: item.family_view || '',
+              caste_category: item.caste_category || '',
+              religion: item.religion || item.minority_religion || '',
+              cast_id: item.caste || '',
+              cast_ida: item.caste_category || ''
+            }));
+
             try {
-              const nextPageResponse = await fetch(`http://localhost:5002/api/area_mapping?page=2&limit=1`);
-              if (nextPageResponse.ok) {
-                const nextPageData = await nextPageResponse.json();
-                if (Array.isArray(nextPageData) && nextPageData.length > 0) {
-                  // There's more data, estimate total
-                  totalCount = '10000+'; // Show approximate total
-                  totalPages = Math.ceil(10000 / pagination.itemsPerPage);
-                } else {
-                  // No more data, this is the last page
-                  totalCount = mappedData.length;
-                  totalPages = 1;
+              const districts = Array.from(new Set(mappedData.map(r => r.district).filter(Boolean)));
+              if (districts.length > 0) {
+                const mapRes = await fetch(`http://localhost:5002/api/acpc-mapping?districts=${encodeURIComponent(districts.join(','))}`);
+                if (mapRes.ok) {
+                  const mapping: Record<string, { pc_id: any; ac_id: any }> = await mapRes.json();
+                  mappedData = mappedData.map(row => {
+                    const m = mapping[row.district];
+                    if (m) {
+                      return {
+                        ...row,
+                        parliament: row.parliament || (m.pc_id != null ? String(m.pc_id) : ''),
+                        assembly: row.assembly || (m.ac_id != null ? String(m.ac_id) : ''),
+                      };
+                    }
+                    return row;
+                  });
                 }
               }
-            } catch (error) {
-              // If we can't check next page, assume there's more data
-              totalCount = '10000+';
-              totalPages = Math.ceil(10000 / pagination.itemsPerPage);
+            } catch {}
+            
+            setData(mappedData);
+            
+            // Try to get total count from API response headers or check if we have more data
+            let totalCount: number | string = mappedData.length;
+            let totalPages = 1;
+            
+            // If we got exactly the limit, there might be more data
+            if (mappedData.length === pagination.itemsPerPage) {
+              // Try to fetch one more record to see if there's more data
+              try {
+                const nextPageResponse = await fetch(`http://localhost:5002/api/area_mapping?page=2&limit=1`);
+                if (nextPageResponse.ok) {
+                  const nextPageData = await nextPageResponse.json();
+                  if (Array.isArray(nextPageData) && nextPageData.length > 0) {
+                    // There's more data, estimate total
+                    totalCount = '10000+'; // Show approximate total
+                    totalPages = Math.ceil(10000 / pagination.itemsPerPage);
+                  } else {
+                    // No more data, this is the last page
+                    totalCount = mappedData.length;
+                    totalPages = 1;
+                  }
+                }
+              } catch (error) {
+                // If we can't check next page, assume there's more data
+                totalCount = '10000+';
+                totalPages = Math.ceil(10000 / pagination.itemsPerPage);
+              }
+            } else {
+              // We got less than the limit, so this is the last page
+              totalCount = mappedData.length;
+              totalPages = 1;
             }
-          } else {
-            // We got less than the limit, so this is the last page
-            totalCount = mappedData.length;
-            totalPages = 1;
+            
+            setPagination(prev => ({
+              ...prev,
+              totalItems: totalCount,
+              totalPages: totalPages
+            }));
+            
+          } catch (parseError) {
+            console.error('JSON parsing error:', parseError);
+            const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parsing error';
+            throw new Error(`Failed to parse API response: ${errorMessage}`);
           }
           
-          setPagination(prev => ({
-            ...prev,
-            totalItems: totalCount,
-            totalPages: totalPages
-          }));
-          
-        } catch (parseError) {
-          console.error('JSON parsing error:', parseError);
-          const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parsing error';
-          throw new Error(`Failed to parse API response: ${errorMessage}`);
+          setLoading(false);
+        } catch (error) {
+          // console.error('Error fetching initial data:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          setError(`Failed to fetch initial data: ${errorMessage}`);
+          setData([]);
+          setLoading(false);
         }
-        
-        setLoading(false);
-      } catch (error) {
-        // console.error('Error fetching initial data:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        setError(`Failed to fetch initial data: ${errorMessage}`);
-        setData([]);
-        setLoading(false);
-      }
-    };
-    
-    initialFetch();
-  }, [pagination.itemsPerPage]); // Only depend on page size changes, not filters
+      };
+      
+      initialFetch();
+    } else {
+      // No filters selected, show empty state
+      setData([]);
+      setLoading(false);
+      setPagination(prev => ({
+        ...prev,
+        totalItems: 0,
+        totalPages: 0
+      }));
+    }
+  }, [pagination.itemsPerPage, memoizedMasterFilters, memoizedDetailedFilters]); // Depend on filters to trigger initial load
 
   // Filter effect: only run when actual filter values change, not on page navigation
   const lastFiltersRef = useRef<string>('');
@@ -1550,7 +1591,17 @@ function DataTable({
 
     const hasMasterFilters = Object.values(master).some(val => val && val !== '');
     const hasDetailedFilters = Object.values(detailed).some(val => val && val !== '');
-    if (!(hasMasterFilters || hasDetailedFilters)) return;
+    
+    // If no filters are selected, clear data and show empty state
+    if (!(hasMasterFilters || hasDetailedFilters)) {
+      setData([]);
+      setPagination(prev => ({
+        ...prev,
+        totalItems: 0,
+        totalPages: 0
+      }));
+      return;
+    }
 
     filterDebounceRef.current = window.setTimeout(() => {
       console.log('🔍 Filters changed, refetching data:', { masterFilters: master, detailedFilters: detailed });
@@ -2084,20 +2135,33 @@ function DataTable({
       console.log('🔄 Refresh event received from MasterFilter');
       // Reset to first page and fetch fresh data
       setPagination(prev => ({ ...prev, currentPage: 1 }));
-      fetchDivisionData();
+      if (!hasActiveFilters()) {
+        setData([]);
+        setLoading(false);
+        setFilterLoading(false);
+        setPagination(prev => ({ ...prev, totalItems: 0, totalPages: 0 }));
+      } else {
+        fetchDivisionData();
+      }
+    };
+
+    const handleDataAlterationUpdate = (event: CustomEvent) => {
+      console.log('🔄 Data alteration update event received:', event.detail);
+      // Refresh data to show updated information
+      if (hasActiveFilters()) {
+        setFilterLoading(true);
+        handlePageChange(1, true); // Refresh current page data
+      }
     };
 
     window.addEventListener('refreshDataTable', handleRefreshEvent);
+    window.addEventListener('dataAlterationUpdate', handleDataAlterationUpdate as EventListener);
     
     return () => {
       window.removeEventListener('refreshDataTable', handleRefreshEvent);
+      window.removeEventListener('dataAlterationUpdate', handleDataAlterationUpdate as EventListener);
     };
-  }, [fetchDivisionData]);
-
-  // Effect to update goToPageInput when current page changes
-  useEffect(() => {
-    setGoToPageInput(pagination.currentPage.toString());
-  }, [pagination.currentPage]);
+  }, [fetchDivisionData, hasActiveFilters, handlePageChange]);
 
   // Optimized keyboard handler with direct cell reference
   const currentCellRef = useRef<{row: number, column: string} | null>(null);
@@ -2310,8 +2374,10 @@ function DataTable({
 
   // Pre-compute the table body to ensure all hooks are called consistently
   const tableBody = useMemo(() => {
-    // FIXED: Use full data like DivisionDataTable, not paginated data
-    const displayData = memoizedData;
+    // Apply client-side pagination to displayed data
+    const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
+    const endIndex = startIndex + pagination.itemsPerPage;
+    const displayData = memoizedData.slice(startIndex, endIndex);
     const displayColumns = columns;
     const displayColumnIds = displayColumns.map(col => {
       if (col.id) return col.id;
@@ -2319,18 +2385,14 @@ function DataTable({
       return 'unknown';
     });
     
-    // FIXED: Show EXACTLY the number of rows as data length - NO EXTRA ROWS
-    const totalRows = displayData?.length || 0;
-    
-
-    
-    // FIXED: Use simple map like DivisionDataTable - NO DATA REPETITION
+    // Show exactly rows for current page
     return displayData.map((rowData, index) => {
+      const absoluteRowIndex = startIndex + index;
       return (
-        <tr key={`row-${index}`} style={{ height: '28px' }}>
+        <tr key={`row-${absoluteRowIndex}`} style={{ height: '28px' }}>
           {displayColumnIds.map((columnId, cellIndex) => (
             <td
-              key={`${index}-${columnId}`}
+              key={`${absoluteRowIndex}-${columnId}`}
               className="border-r border-gray-300 border-b border-gray-300 p-0"
               style={{ 
                 width: (() => {
@@ -2368,15 +2430,15 @@ function DataTable({
                 <ExcelCell
                   value={
                     columnId === 'select' 
-                      ? index + 1
+                      ? absoluteRowIndex + 1
                       : rowData[columnId as keyof Voter] || ''
                   }
-                  rowIndex={index}
+                  rowIndex={absoluteRowIndex}
                   columnId={columnId}
-                  isSelected={selectedCell?.row === index && selectedCell?.column === columnId}
-                  isFocused={focusedCell?.row === index && focusedCell?.column === columnId}
-                  isEditing={editingCell?.row === index && editingCell?.column === columnId}
-                  isInSelectionRange={isCellInSelectionRange(index, columnId)}
+                  isSelected={selectedCell?.row === absoluteRowIndex && selectedCell?.column === columnId}
+                  isFocused={focusedCell?.row === absoluteRowIndex && focusedCell?.column === columnId}
+                  isEditing={editingCell?.row === absoluteRowIndex && editingCell?.column === columnId}
+                  isInSelectionRange={isCellInSelectionRange(absoluteRowIndex, columnId)}
                   onCellClick={handleCellClick}
                   onCellDoubleClick={handleCellDoubleClick}
                   onCellKeyDown={handleCellKeyDown}
@@ -2385,17 +2447,25 @@ function DataTable({
                   editValue={editValue}
                   setEditValue={setEditValue}
                   onStopEditing={handleStopEditing}
-                  loading={updatingCells.has(`${index}-${columnId}`)}
+                  loading={updatingCells.has(`${absoluteRowIndex}-${columnId}`)}
                   isCopyBlinking={isCopyBlinking}
                   displayValue={
                     columnId === 'name'
                       ? (
-                          <div className="flex items-center space-x-2 truncate">
-                            <span className="truncate">{rowData.name || ''}</span>
-                            <span className="text-gray-400">•</span>
-                            <span className="shrink-0 text-gray-700">{rowData.gender || ''}</span>
-                            <span className="text-gray-400">•</span>
-                            <span className="shrink-0 text-gray-700">{rowData.age || ''}</span>
+                          <div className="flex items-center w-full">
+                            <div className="flex-1 min-w-0">
+                              <span className="truncate block">{rowData.name || ''}</span>
+                            </div>
+                            <div className="flex items-center space-x-1 mx-2 flex-shrink-0">
+                              <span className="text-gray-400">|</span>
+                              <span className="text-gray-700 font-medium">
+                                {rowData.gender ? (rowData.gender.toLowerCase() === 'male' ? 'M' : rowData.gender.toLowerCase() === 'female' ? 'F' : rowData.gender) : ''}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-1 flex-shrink-0">
+                              <span className="text-gray-400">|</span>
+                              <span className="text-gray-700 font-medium">{rowData.age || ''}</span>
+                            </div>
                           </div>
                         )
                       : columnId === 'verify'
@@ -2431,7 +2501,7 @@ function DataTable({
         </tr>
       );
     });
-  }, [memoizedData, loading, columns, selectedCell?.row, selectedCell?.column, focusedCell?.row, focusedCell?.column, editingCell?.row, editingCell?.column, editValue, columnIds, isCellInSelectionRange, handleCellClick, handleCellDoubleClick, handleCellKeyDown, handleUpdateData, handleUpdateAndNavigate, setEditValue, handleStopEditing]);
+  }, [memoizedData, loading, columns, selectedCell?.row, selectedCell?.column, focusedCell?.row, focusedCell?.column, editingCell?.row, editingCell?.column, editValue, columnIds, isCellInSelectionRange, handleCellClick, handleCellDoubleClick, handleCellKeyDown, handleUpdateData, handleUpdateAndNavigate, setEditValue, handleStopEditing, pagination.currentPage, pagination.itemsPerPage, columnSizes, isCopyBlinking, openFamilyModal]);
 
   // Function to trigger copy blink effect (Excel-like behavior)
   const triggerCopyBlinkEffect = () => {
@@ -2441,14 +2511,41 @@ function DataTable({
     }, 300); // Blink for 300ms
   };
 
+  // Helper removed (hoisted function is used instead)
+
   // Function to refresh data with current filters
   const refreshDataWithFilters = () => {
     console.log('🔄 Manually refreshing data with current filters');
-    handlePageChange(1); // Go to first page and refetch
+    // Do not fetch if no filters are selected
+    if (!hasActiveFilters()) {
+      setData([]);
+      setLoading(false);
+      setFilterLoading(false);
+      setPagination(prev => ({
+        ...prev,
+        currentPage: 1,
+        totalItems: 0,
+        totalPages: 0
+      }));
+      return;
+    }
+    handlePageChange(1, true); // Go to first page and refetch as filter-driven
   };
 
   // Function to refresh data
   const fetchDataAgain = () => {
+    // Guard: never fetch unfiltered data
+    if (!hasActiveFilters()) {
+      setData([]);
+      setLoading(false);
+      setFilterLoading(false);
+      setPagination(prev => ({
+        ...prev,
+        totalItems: 0,
+        totalPages: 0
+      }));
+      return;
+    }
     const page = pagination.currentPage;
     const limit = pagination.itemsPerPage;
     
@@ -2641,11 +2738,32 @@ function DataTable({
       <div className="bg-white rounded-lg shadow-lg p-8">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <div className="text-gray-600">Loading data from area_mapping API...</div>
-          <div className="text-sm text-gray-500 mt-2">This may take a few moments for large datasets</div>
+          <div className="text-gray-600">Loading filtered data...</div>
+          <div className="text-sm text-gray-500 mt-2">Fetching data based on your selected filters</div>
         </div>
       </div>
     );
+  }
+
+  // Show message when no filters are selected
+  if (!memoizedData.length && !loading && !error) {
+    const hasMasterFilters = memoizedMasterFilters && Object.values(memoizedMasterFilters).some(val => val && val !== '');
+    const hasDetailedFilters = memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0 && Object.values(memoizedDetailedFilters).some(val => val && val !== '');
+    
+    if (!hasMasterFilters && !hasDetailedFilters) {
+      return (
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          <div className="text-center">
+            <div className="text-gray-400 text-6xl mb-4">🔍</div>
+            <div className="text-gray-600 text-lg font-medium mb-2">No Filters Selected</div>
+            <div className="text-gray-500 mb-4">Please select filters from Master Filter or Filter Section to view data</div>
+            <div className="text-sm text-gray-400">
+              Select Parliament, Assembly, District, Block, or other detailed filters to get started
+            </div>
+          </div>
+        </div>
+      );
+    }
   }
 
   if (error) {
@@ -2744,7 +2862,9 @@ function DataTable({
                         <td className="border px-2 py-1">{m.name}</td>
                         <td className="border px-2 py-1">{m.fname}</td>
                         <td className="border px-2 py-1">{m.mname}</td>
-                        <td className="border px-2 py-1">{m.gender}</td>
+                        <td className="border px-2 py-1">
+                          {m.gender ? (m.gender.toLowerCase() === 'male' ? 'M' : m.gender.toLowerCase() === 'female' ? 'F' : m.gender) : ''}
+                        </td>
                         <td className="border px-2 py-1">{m.mobile1}</td>
                         <td className="border px-2 py-1">{m.village}</td>
                         <td className="border px-2 py-1">{m.tehsil}</td>
@@ -2761,7 +2881,7 @@ function DataTable({
         </div>
       )}
       {/* Excel-like DataGrid */}
-      <div className="h-full w-full overflow-auto pb-16" ref={tableRef}>
+      <div className="h-full w-full overflow-auto pb-10" ref={tableRef}>
         <table className="border-collapse w-full" style={{ borderSpacing: 0, tableLayout: 'fixed' }}>
           {/* Excel-like Header */}
           <thead>
@@ -2815,191 +2935,23 @@ function DataTable({
         </table>
       </div>
 
-      {/* Grid Footer */}
-      <div className="bg-gray-50 px-6 py-3 border-t border-gray-200 absolute bottom-0 left-0 right-0">
-        <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-gray-700 space-y-2 sm:space-y-0 mr-10">
-          <div className="text-center sm:text-left">
-            {loading ? (
-              <div className="flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                Loading data...
-              </div>
-            ) : (
-              <div className="text-sm">
-                <span className="font-medium">Page {pagination.currentPage}</span>
-                {typeof pagination.totalItems === 'number' ? (
-                  <span> of {pagination.totalPages} • </span>
-                ) : (
-                  <span> • </span>
-                )}
-                <span>Showing {memoizedData.length} entries</span>
-                {typeof pagination.totalItems === 'string' && (
-                  <span> (Total: {pagination.totalItems})</span>
-                )}
-                
-                {/* Show active filters */}
-                {(memoizedMasterFilters && Object.keys(memoizedMasterFilters).some(key => memoizedMasterFilters[key as keyof typeof memoizedMasterFilters])) ||
-                 (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) ? (
-                  <div className="mt-1 text-xs text-blue-600">
-                    🔍 Filters active
-                    {memoizedMasterFilters && Object.keys(memoizedMasterFilters).some(key => memoizedMasterFilters[key as keyof typeof memoizedMasterFilters]) && (
-                      <span className="ml-1">• Master: {Object.entries(memoizedMasterFilters).filter(([_, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')}</span>
-                    )}
-                    {memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0 && (
-                      <span className="ml-1">• Detailed: {Object.entries(memoizedDetailedFilters).filter(([_, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')}</span>
-                    )}
-                  </div>
-                ) : null}
-                {/* Show filter loading indicator */}
-                {filterLoading && (
-                  <div className="mt-1 text-xs text-orange-600">
-                    <span className="animate-spin inline-block w-3 h-3 border-2 border-orange-600 border-t-transparent rounded-full mr-1"></span>
-                    Updating filters...
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          
-          {/* Centered Pagination */}
-          <div className="flex items-center justify-center space-x-1">
-            {/* Refresh Button */}
-            <button 
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 cursor-pointer"
-              onClick={refreshDataWithFilters}
-              disabled={loading}
-              title="Refresh with current filters"
-            >
-              🔄
-            </button>
-            
-            {/* Previous page button */}
-            <button 
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 cursor-pointer"
-              onClick={() => {
-                console.log(`🔄 Previous page clicked: ${pagination.currentPage - 1}`);
-                handlePageChange(pagination.currentPage - 1);
-              }}
-              disabled={!pagination || pagination.currentPage <= 1 || loading}
-              title="Previous"
-            >
-              &lt;
-            </button>
-          
-          {/* Page numbers with ellipsis */}
-          {(() => {
-            if (!pagination) return null;
-            const totalPages = pagination.totalPages;
-            const currentPage = pagination.currentPage;
-            const pages = [];
-            
-            if (totalPages <= 5) {
-              // If total pages is 5 or less, show all pages
-              for (let i = 1; i <= totalPages; i++) {
-                pages.push(i);
-              }
-            } else {
-              // Show first 5 pages
-              for (let i = 1; i <= 5; i++) {
-                pages.push(i);
-              }
-              
-              // Add ellipsis
-              pages.push('...');
-              
-              // Add total pages
-              pages.push(totalPages);
-            }
-            
-            return pages.map((page, index) => (
-              <div key={index}>
-                {page === '...' ? (
-                  <span className="px-2 py-1 text-gray-400 cursor-pointer">......</span>
-                ) : (
-                  <button
-                    className={`px-3 py-1 rounded transition-colors ${
-                      page === currentPage
-                        ? 'bg-gray-600 text-white cursor-pointer'
-                        : 'border border-gray-300 hover:bg-gray-100 text-gray-700 cursor-pointer '
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                    onClick={() => {
-                      console.log(`🔄 Clicked on page ${page}`);
-                      handlePageChange(page as number);
-                    }}
-                    disabled={loading}
-                  >
-                    {page}
-                  </button>
-                )}
-              </div>
-            ));
-          })()}
-          
-                        {/* Next page icon > */}
-            <button 
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 cursor-pointer"
-              onClick={() => {
-                console.log(`🔄 Next page clicked: ${pagination.currentPage + 1}`);
-                handlePageChange(pagination.currentPage + 1);
-              }}
-              disabled={!pagination || pagination.currentPage >= pagination.totalPages || loading}
-              title="Next page"
-            >
-              &gt;
-            </button>
-            
-            {/* Go to Page input */}
-            <div className="flex items-center space-x-1 ml-2 cursor-pointer">
-              <span className="text-xs text-gray-600">Go to:</span>
-              <input
-                type="number"
-                min="1"
-                max={pagination.totalPages}
-                value={goToPageInput}
-                onChange={(e) => setGoToPageInput((e.target as HTMLInputElement).value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const page = parseInt((e.target as HTMLInputElement).value);
-                    console.log(`🔄 Go to page input: ${page}, total pages: ${pagination.totalPages}`);
-                    if (page >= 1 && page <= pagination.totalPages) {
-                      handlePageChange(page);
-                      setGoToPageInput(page.toString());
-                    } else {
-                      console.log(`❌ Invalid page number: ${page}`);
-                    }
-                  }
-                }}
-                onBlur={() => {
-                  const page = parseInt(goToPageInput);
-                  if (page >= 1 && page <= pagination.totalPages) {
-                    handlePageChange(page);
-                    setGoToPageInput(page.toString());
-                  } else {
-                    setGoToPageInput(pagination.currentPage.toString());
-                  }
-                }}
-                className="w-16 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={loading}
-              />
-              <span className="text-xs text-gray-500">of {pagination.totalPages}</span>
-            </div>
-            
-            {/* Items per page dropdown */}
-            <div className="flex items-center space-x-1 ml-2">
-              <span className="text-xs text-gray-600">Show:</span>
-              <select
-                value={pagination.itemsPerPage}
-                onChange={(e) => handleItemsPerPageChange(parseInt(e.target.value))}
-                className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                disabled={loading}
-              >
-                <option value={100}>100</option>
-                <option value={250}>250</option>
-                <option value={500}>500</option>
-              </select>
-            </div>
-          </div>
-        </div>
+      {/* Grid Footer - Pagination */}
+      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200">
+        <CommonPagination
+          currentPage={pagination.currentPage}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          itemsPerPage={pagination.itemsPerPage}
+          onPageChange={handlePageChange}
+          onItemsPerPageChange={handleItemsPerPageChange}
+          loading={loading}
+          showRefreshButton={true}
+          onRefresh={refreshDataWithFilters}
+          showFiltersInfo={true}
+          masterFilters={memoizedMasterFilters}
+          detailedFilters={memoizedDetailedFilters}
+          filterLoading={filterLoading}
+        />
       </div>
     </div>
   );

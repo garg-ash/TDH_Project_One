@@ -23,7 +23,10 @@ const sampleSurnameData = [
 
 export default function SurnamePage() {
   const [loading, setLoading] = useState(false);
-  const [surnameData, setSurnameData] = useState<SurnameData[]>(sampleSurnameData);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [surnameData, setSurnameData] = useState<SurnameData[]>([]);
+  const [showTable, setShowTable] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     fname: '',
@@ -44,10 +47,19 @@ export default function SurnamePage() {
   // Dropdown state for count filter
   const [countFilter, setCountFilter] = useState('');
 
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    itemsPerPage: 100,
+    totalItems: 0,
+    totalPages: 1,
+  });
+
   // Fetch surname data from API with master filters
-  const fetchSurnameData = async (filters?: any) => {
+  const fetchSurnameData = async (filters?: any, page: number = 1) => {
     try {
       setLoading(true);
+      setError(null); // Clear previous errors
       
       // Combine master filters with form filters
       const combinedFilters = {
@@ -57,85 +69,82 @@ export default function SurnamePage() {
       
       console.log('Fetching surname data with combined filters:', combinedFilters);
       
-      // Check if master filters are applied
-      if (masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block) {
-        console.log('Master filters active, filtering data based on:', masterFilters);
-        
-        // If master filters are active, filter the sample data based on the selected fields
-        // In a real implementation, this would be an API call with the master filters
-        let filteredData = sampleSurnameData;
-        
-        // Simulate filtering based on master filters
-        if (masterFilters.district) {
-          // Filter data based on district (this is just a simulation)
-          // In reality, the API would return only data for the selected district
-          filteredData = sampleSurnameData.filter(item => {
-            // Simulate district-based filtering
-            return item.surname.toLowerCase().includes(masterFilters.district!.toLowerCase()) ||
-                   item.castId.toLowerCase().includes(masterFilters.district!.toLowerCase());
-          });
-        }
-        
-        if (masterFilters.assembly) {
-          // Additional filtering based on assembly
-          filteredData = filteredData.filter(item => {
-            return item.surname.toLowerCase().includes(masterFilters.assembly!.toLowerCase()) ||
-                   item.castId.toLowerCase().includes(masterFilters.assembly!.toLowerCase());
-          });
-        }
-        
-        if (masterFilters.parliament) {
-          // Additional filtering based on parliament
-          filteredData = filteredData.filter(item => {
-            return item.surname.toLowerCase().includes(masterFilters.parliament!.toLowerCase()) ||
-                   item.castId.toLowerCase().includes(masterFilters.parliament!.toLowerCase());
-          });
-        }
-        
-        if (masterFilters.block) {
-          // Additional filtering based on block
-          filteredData = filteredData.filter(item => {
-            return item.surname.toLowerCase().includes(masterFilters.block!.toLowerCase()) ||
-                   item.castId.toLowerCase().includes(masterFilters.block!.toLowerCase());
-          });
-        }
-        
-        setSurnameData(filteredData);
-        console.log(`Filtered to ${filteredData.length} surnames based on master filters`);
-      } else {
-        // No master filters, show all data
-        console.log('No master filters active, showing all data');
-        setSurnameData(sampleSurnameData);
+      // Build query parameters for the API
+      const queryParams = new URLSearchParams();
+      
+      if (combinedFilters.name) {
+        queryParams.append('name', combinedFilters.name);
+      }
+      if (combinedFilters.fname) {
+        queryParams.append('fname', combinedFilters.fname);
+      }
+      if (combinedFilters.mname) {
+        queryParams.append('mname', combinedFilters.mname);
+      }
+      if (combinedFilters.parliament) {
+        queryParams.append('parliament', combinedFilters.parliament);
+      }
+      if (combinedFilters.assembly) {
+        queryParams.append('assembly', combinedFilters.assembly);
+      }
+      if (combinedFilters.district) {
+        queryParams.append('district', combinedFilters.district);
+      }
+      if (combinedFilters.block) {
+        queryParams.append('block', combinedFilters.block);
+      }
+      if (countFilter) {
+        queryParams.append('count', countFilter);
       }
       
-      // Apply additional form filters if any
-      if (filters && (filters.name || filters.fname || filters.mname)) {
-        let formFilteredData = surnameData;
-        
-        if (filters.name) {
-          formFilteredData = formFilteredData.filter(item => 
-            item.surname.toLowerCase().includes(filters.name.toLowerCase())
-          );
-        }
-        
-        if (filters.fname) {
-          formFilteredData = formFilteredData.filter(item => 
-            item.castId.toLowerCase().includes(filters.fname.toLowerCase())
-          );
-        }
-        
-        if (filters.mname) {
-          formFilteredData = formFilteredData.filter(item => 
-            item.castIda.toLowerCase().includes(filters.mname.toLowerCase())
-          );
-        }
-        
-        setSurnameData(formFilteredData);
-        console.log(`Further filtered to ${formFilteredData.length} surnames based on form filters`);
+      // Add pagination parameters
+      queryParams.append('page', page.toString());
+      queryParams.append('limit', pagination.itemsPerPage.toString());
+      
+      // Call the real API
+      const response = await apiService.getSurnameData({
+        name: combinedFilters.name,
+        fname: combinedFilters.fname,
+        mname: combinedFilters.mname,
+        parliament: combinedFilters.parliament,
+        assembly: combinedFilters.assembly,
+        district: combinedFilters.district,
+        block: combinedFilters.block,
+        count: countFilter,
+        // If no checkboxes selected, default to 'name' so data does not go blank
+        sources: [
+          nameChecked ? 'name' : null,
+          fnameChecked ? 'fname' : null,
+          mnameChecked ? 'mname' : null,
+        ].filter(Boolean).join(',') || 'name'
+      });
+      
+      // Apply additional filters from the backend response
+      let filteredData = response;
+      
+      // Apply count filter if specified
+      if (countFilter) {
+        const countValue = parseInt(countFilter);
+        filteredData = filteredData.filter(item => item.count > countValue);
       }
+      
+      // Update pagination state
+      const totalItems = filteredData.length;
+      const totalPages = Math.ceil(totalItems / pagination.itemsPerPage);
+      
+      setPagination(prev => ({
+        ...prev,
+        currentPage: page,
+        totalItems,
+        totalPages: Math.max(1, totalPages)
+      }));
+      
+      setSurnameData(filteredData);
+      console.log(`✅ Fetched ${filteredData.length} surnames from API with filters:`, combinedFilters);
       
     } catch (error) {
       console.error('Error fetching surname data:', error);
+      setError('Failed to fetch surname data. Please try again later.');
       // Fallback to sample data on error
       setSurnameData(sampleSurnameData);
     } finally {
@@ -144,21 +153,27 @@ export default function SurnamePage() {
   };
 
   // Load initial data when component mounts
-  useEffect(() => {
-    fetchSurnameData();
-  }, []);
+  // useEffect(() => {
+  //   fetchSurnameData();
+  // }, []);
 
   // Effect to refetch data when master filters change
   useEffect(() => {
     if (masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block) {
       console.log('Master filters changed, refetching surname data:', masterFilters);
+      // Only fetch if table is already shown
+      if (!showTable) {
+        setShowTable(true);
+      }
       fetchSurnameData();
     } else {
-      // If all master filters are cleared, show all data
-      console.log('All master filters cleared, showing all surname data');
-      setSurnameData(sampleSurnameData);
+      // If all master filters are cleared, clear data if table is shown
+      if (showTable) {
+        console.log('All master filters cleared, clearing surname data');
+        setSurnameData([]);
+      }
     }
-  }, [masterFilters]);
+  }, [masterFilters, showTable]);
 
   const handleMasterFilterChange = (filters: any) => {
     console.log('Master filter changed:', filters);
@@ -175,12 +190,77 @@ export default function SurnamePage() {
     console.log('Go button clicked - processing surname data');
     console.log('Form data:', formData);
     
+    // Show the table first
+    setShowTable(true);
+    
     // Fetch data based on form inputs combined with master filters
     fetchSurnameData({
       name: formData.name,
       fname: formData.fname,
       mname: formData.mname
     });
+  };
+
+  const handleClearFilters = async () => {
+    setRefreshing(true);
+    try {
+      setNameChecked(false);
+      setFnameChecked(false);
+      setMnameChecked(false);
+      setFormData({
+        name: '',
+        fname: '',
+        mname: ''
+      });
+      setCountFilter('');
+      
+      // Hide the table when clearing filters
+      setShowTable(false);
+      setSurnameData([]);
+      
+      // Reset pagination
+      setPagination(prev => ({
+        ...prev,
+        currentPage: 1,
+        totalItems: 0,
+        totalPages: 1
+      }));
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    if (page < 1 || page > pagination.totalPages) return;
+    
+    setPagination(prev => ({ ...prev, currentPage: page }));
+    
+    // Fetch data for the new page
+    const filters = {
+      name: formData.name,
+      fname: formData.fname,
+      mname: formData.mname
+    };
+    
+    fetchSurnameData(filters, page);
+  };
+
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setPagination(prev => ({ 
+      ...prev, 
+      itemsPerPage: newItemsPerPage,
+      currentPage: 1 // Reset to first page
+    }));
+    
+    // Fetch data with new page size
+    const filters = {
+      name: formData.name,
+      fname: formData.fname,
+      mname: formData.mname
+    };
+    
+    fetchSurnameData(filters, 1);
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -230,7 +310,10 @@ export default function SurnamePage() {
             <ArrowRight className="rotate-180" size={20} />
           </button>
           <div className="flex-1">
-            <MasterFilter onMasterFilterChange={handleMasterFilterChange} />
+            <MasterFilter 
+              onMasterFilterChange={handleMasterFilterChange} 
+              hasData={surnameData && surnameData.length > 0}
+            />
           </div>
         </div>
       </div>
@@ -238,7 +321,7 @@ export default function SurnamePage() {
       <Navbar />
       
       {/* Master Filter Status Display */}
-              {(masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block) && (
+      {(masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block) && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg mx-6 mt-4 p-3">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -261,131 +344,213 @@ export default function SurnamePage() {
         </div>
       )}
       
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg mx-6 mt-4 p-3">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="h-5 w-5 text-red-400">
+                <svg fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-800">
+                <strong>Error:</strong> {error}
+              </p>
+              <button
+                onClick={() => setError(null)}
+                className="text-xs text-red-600 hover:text-red-800 mt-1 underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Loading Indicator */}
+      {/* {loading && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg mx-6 mt-4 p-3">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-blue-800">
+                <strong>Loading...</strong> Fetching surname data from database
+              </p>
+            </div>
+          </div>
+        </div>
+      )} */}
+      
       {/* Form Fields Section */}
-      <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
+      <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 flex justify-center">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center space-x-4">
-            <div className="flex-1">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  placeholder="Enter name"
-                  value={formData.name}
-                  onChange={(e) => {
-                    handleInputChange('name', e.target.value);
-                    if (e.target.value && !nameChecked) {
-                      setNameChecked(true);
-                    }
-                  }}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
-                />
-                <input
-                  type="checkbox"
-                  checked={nameChecked}
-                  onChange={(e) => {
-                    setNameChecked(e.target.checked);
-                    if (!e.target.checked) {
-                      setFormData(prev => ({ ...prev, name: '' }));
-                    }
-                  }}
-                  className="w-4 h-4 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500 focus:ring-2"
-                />
-                {/* <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Name</label> */}
-              </div>
+          <div className="flex items-center justify-center space-x-8">
+            <div className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                checked={nameChecked}
+                onChange={(e) => {
+                  setNameChecked(e.target.checked);
+                  if (!e.target.checked) {
+                    setFormData(prev => ({ ...prev, name: '' }));
+                  }
+                }}
+                className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+              />
+              <label className="text-sm font-medium text-gray-700 cursor-pointer">
+                नाम
+              </label>
             </div>
             
-            <div className="flex-1">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  placeholder="Enter father's name"
-                  value={formData.fname}
-                  onChange={(e) => {
-                    handleInputChange('fname', e.target.value);
-                    if (e.target.value && !fnameChecked) {
-                      setFnameChecked(true);
-                    }
-                  }}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
-                />
-                <input
-                  type="checkbox"
-                  checked={fnameChecked}
-                  onChange={(e) => {
-                    setFnameChecked(e.target.checked);
-                    if (!e.target.checked) {
-                      setFormData(prev => ({ ...prev, fname: '' }));
-                    }
-                  }}
-                  className="w-4 h-4 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500 focus:ring-2"
-                />
-                {/* <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Fname</label> */}
-              </div>
+            <div className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                checked={fnameChecked}
+                onChange={(e) => {
+                  setFnameChecked(e.target.checked);
+                  if (!e.target.checked) {
+                    setFormData(prev => ({ ...prev, fname: '' }));
+                  }
+                }}
+                className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+              />
+              <label className="text-sm font-medium text-gray-700 cursor-pointer">
+                पिता का नाम
+              </label>
             </div>
             
-            <div className="flex-1">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  placeholder="Enter mother's name"
-                  value={formData.mname}
-                  onChange={(e) => {
-                    handleInputChange('mname', e.target.value);
-                    if (e.target.value && !mnameChecked) {
-                      setMnameChecked(true);
-                    }
-                  }}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
-                />
-                <input
-                  type="checkbox"
-                  checked={mnameChecked}
-                  onChange={(e) => {
-                    setMnameChecked(e.target.checked);
-                    if (!e.target.checked) {
-                      setFormData(prev => ({ ...prev, mname: '' }));
-                    }
-                  }}
-                  className="w-4 h-4 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500 focus:ring-2"
-                />
-                {/* <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Mname</label> */}
-              </div>
+            <div className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                checked={mnameChecked}
+                onChange={(e) => {
+                  setMnameChecked(e.target.checked);
+                  if (!e.target.checked) {
+                    setFormData(prev => ({ ...prev, mname: '' }));
+                  }
+                }}
+                className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+              />
+              <label className="text-sm font-medium text-gray-700 cursor-pointer">
+                माँ का नाम
+              </label>
             </div>
             
-            <div className="flex items-end">
+            <div className="flex items-center space-x-3">
               <button
                 onClick={handleGoClick}
-                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer"
+                disabled={!nameChecked && !fnameChecked && !mnameChecked}
+                className={`px-6 py-2 rounded-lg transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer ${
+                  nameChecked || fnameChecked || mnameChecked
+                    ? 'bg-gray-600 text-white hover:bg-gray-900'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
               >
                 <span>Go</span>
               </button>
+              
+              <button
+                onClick={handleClearFilters}
+                disabled={refreshing}
+                className={`p-2 rounded-full transition-colors duration-200 border cursor-pointer ${
+                  refreshing 
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-300'
+                }`}
+                title={refreshing ? "Refreshing..." : "Refresh Data"}
+              >
+                {refreshing ? (
+                  <svg 
+                    className="w-5 h-5 animate-spin" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+                    />
+                  </svg>
+                ) : (
+                  <svg 
+                    className="w-5 h-5" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+                    />
+                  </svg>
+                )}
+              </button>
             </div>
             
-            <div className="flex items-end">
+            <div className="flex items-center space-x-3">
+              <label className="text-sm font-medium text-gray-700">Min Count:</label>
               <select
                 value={countFilter}
                 onChange={(e) => setCountFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-200"
               >
-                <option value="">Select Count</option>
+                <option value="">All</option>
                 <option value="500">{'>'}500</option>
                 <option value="1000">{'>'}1000</option>
                 <option value="2000">{'>'}2000</option>
                 <option value="5000">{'>'}5000</option>
               </select>
             </div>
-          </div>
+          </div>       
         </div>
       </div>
       
       {/* Excel-like Data Table Section */}
-      <div className="pt-4 pb-4">
-        <SurnameDataTable 
-          data={surnameData}
-          loading={loading}
-          onUpdateSurname={handleUpdateSurname}
-        />
-      </div>
+      {showTable && (
+        <div className="pt-4 pb-4">
+          <SurnameDataTable 
+            data={surnameData}
+            loading={loading}
+            onUpdateSurname={handleUpdateSurname}
+            pagination={pagination}
+            onPageChange={handlePageChange}
+            onItemsPerPageChange={handleItemsPerPageChange}
+            showPagination={true}
+          />
+        </div>
+      )}
+      
+      {/* No Data Message */}
+      {!showTable && (
+        <div className="flex items-center justify-center py-16">
+          <div className="text-center">
+            <div className="text-gray-400 mb-4">
+              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Selected</h3>
+            <p className="text-gray-500 mb-4">Select one or more filters and click "Go" to view surname data</p>
+            <div className="flex items-center justify-center space-x-2 text-sm text-gray-400">
+              <span>✓</span>
+              <span>Check the filters you want to apply</span>
+              <span>→</span>
+              <span>Click "Go" button</span>
+              <span>→</span>
+              <span>View results in table</span>
+            </div>
+          </div>
+        </div>
+      )}
       
     </div>
   );

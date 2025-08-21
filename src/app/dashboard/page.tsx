@@ -115,24 +115,9 @@ export default function DashboardPage() {
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-                         <div className="flex items-center space-x-4">
-               <h1 className="text-2xl font-bold text-gray-900">Rajasthan Dashboard</h1>
-               <span className="text-sm text-gray-500">Election Management System</span>
-             </div>
-            <div className="flex items-center space-x-3">
-              {isAuthenticated && (
-                <div className="flex items-center space-x-3">
-                  <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
-                    <span className="text-sm font-medium text-gray-700">
-                      {userInfo?.name ? userInfo.name.charAt(0).toUpperCase() : userInfo?.email.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{userInfo?.name || 'User'}</p>
-                    <p className="text-xs text-gray-500">{userInfo?.email}</p>
-                  </div>
-                </div>
-              )}
+            <div className="flex items-center space-x-4">
+              <h1 className="text-2xl font-bold text-gray-900">Rajasthan Dashboard</h1>
+              <span className="text-sm text-gray-500">Election Management System</span>
             </div>
           </div>
         </div>
