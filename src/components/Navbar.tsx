@@ -48,18 +48,18 @@ export default function Navbar() {
 
   // Helper function to get button classes based on active state
   const getButtonClasses = (path: string) => {
-    const baseClasses = "px-4 py-2 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer";
+    const baseClasses = "px-4 py-2.5 rounded-md transition-all duration-200 font-medium text-base cursor-pointer";
     if (isActive(path)) {
-      return `${baseClasses} bg-gray-200 text-gray-900 hover:bg-gray-300 shadow-md`;
+      return `${baseClasses} bg-gray-200 text-gray-900 shadow-sm`;
     }
-    return `${baseClasses} text-gray-600 hover:text-gray-900 hover:bg-gray-100`;
+    return `${baseClasses} text-gray-700 hover:text-gray-900 hover:bg-gray-100`;
   };
 
   // Helper function to get mobile button classes based on active state
   const getMobileButtonClasses = (path: string) => {
-    const baseClasses = "px-3 py-2 rounded-lg transition-all duration-200 font-medium text-sm text-left cursor-pointer";
+    const baseClasses = "px-3 py-2.5 rounded-md transition-all duration-200 font-medium text-sm text-left cursor-pointer";
     if (isActive(path)) {
-      return `${baseClasses} bg-gray-200 text-gray-900 hover:bg-gray-300 shadow-md`;
+      return `${baseClasses} bg-gray-200 text-gray-900 shadow-sm`;
     }
     return `${baseClasses} text-gray-600 hover:text-gray-900 hover:bg-gray-100`;
   };
@@ -69,8 +69,7 @@ export default function Navbar() {
   };
 
   const handleFilterClick = () => {
-    // Navigate directly to the main page.tsx file under app directory
-    console.log('Filter button clicked - navigating to main page');
+    console.log('Filter button clicked - navigating to home/modules on /');
     router.push('/');
     // Fallback to ensure navigation works
     setTimeout(() => {
@@ -140,6 +139,30 @@ export default function Navbar() {
           window.location.href = '/data-alteration';
         }
         break;
+      case 'Village Mapping':
+        console.log('Navigating to /village-mapping');
+        try {
+          // First try using router.push
+          router.push('/village-mapping');
+          console.log('Router.push called successfully');
+          
+          // Fallback navigation if router.push fails
+          setTimeout(() => {
+            console.log('Checking navigation result...');
+            console.log('Current pathname after navigation:', window.location.pathname);
+            if (window.location.pathname !== '/village-mapping') {
+              console.log('Router navigation failed, using fallback');
+              window.location.href = '/village-mapping';
+            } else {
+              console.log('Navigation successful via router.push');
+            }
+          }, 200);
+        } catch (error) {
+          console.error('Navigation error:', error);
+          console.log('Using fallback navigation');
+          window.location.href = '/village-mapping';
+        }
+        break;
       default:
         console.log('Unknown submenu:', subMenu);
         break;
@@ -165,20 +188,23 @@ export default function Navbar() {
   }, [dataProcessDropdown]);
 
   return (
-    <div className="bg-white shadow-md border-b border-gray-200">
-      <div className="max-w-full mx-auto px-6 py-4">
+    <div className="bg-white shadow-sm border-b border-gray-200">
+      <div className="max-w-7xl mx-auto px-6 py-4">
         <div className="flex justify-between items-center">
           {/* Logo Section */}
           <div className="flex items-center space-x-3">
             <img 
               src="/logo.png" 
               alt="THE BIG OWL Logo" 
-              className="w-10 h-10 object-contain flex-shrink-0 transition-transform hover:scale-105" 
+              className="w-10 h-10 object-contain flex-shrink-0" 
             />
+            <div className="hidden sm:block">
+              <h1 className="text-lg font-semibold text-gray-800">THE BIG OWL</h1>
+            </div>
           </div>
 
           {/* Navigation Menu */}
-          <div className="hidden lg:flex items-center space-x-1">
+          <div className="hidden lg:flex items-center space-x-2">
             <button 
               onClick={() => router.push('/dashboard')}
               className={getButtonClasses('/dashboard')}
@@ -195,10 +221,10 @@ export default function Navbar() {
             <div className="relative" data-dropdown="data-process">
               <button 
                 onClick={handleDataProcessClick}
-                className={`px-4 py-2 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer flex items-center space-x-1 ${
-                  dataProcessDropdown || isActive('/surname') || isActive('/data-alteration')
-                    ? 'bg-gray-200 text-gray-900 shadow-md' 
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                className={`px-4 py-2.5 rounded-md transition-all duration-200 font-medium text-base cursor-pointer flex items-center space-x-1 ${
+                  dataProcessDropdown || isActive('/surname') || isActive('/data-alteration') || isActive('/village-mapping')
+                    ? 'bg-gray-200 text-gray-900 shadow-sm' 
+                    : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
                 <span>Data Process</span>
@@ -206,7 +232,7 @@ export default function Navbar() {
               </button>
               
               {dataProcessDropdown && (
-                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-50">
                   <button
                     onClick={(e) => {
                       e.preventDefault();
@@ -215,7 +241,7 @@ export default function Navbar() {
                       console.log('Event:', e);
                       handleSubMenuClick('By Surname');
                     }}
-                    className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 transition-colors duration-200 text-sm"
+                    className="w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-100 transition-colors duration-200 text-sm"
                   >
                     By Surname
                   </button>
@@ -227,36 +253,43 @@ export default function Navbar() {
                       console.log('Event:', e);
                       handleSubMenuClick('Data Alteration');
                     }}
-                    className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 transition-colors duration-200 text-sm"
+                    className="w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-100 transition-colors duration-200 text-sm"
                   >
                     Data Alteration
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('Village Mapping button clicked');
+                      console.log('Event:', e);
+                      handleSubMenuClick('Village Mapping');
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-100 transition-colors duration-200 text-sm"
+                  >
+                    Village Mapping
                   </button>
                 </div>
               )}
             </div>
-            <button className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer">
+            <button className={getButtonClasses('/import_export')}
+            onClick={() => router.push('/import_export')}>
               Import / Export
             </button>
-            <button className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer">
+            <button className="px-4 py-2.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-base cursor-pointer">
               Maps
             </button>
-            <button className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer">
+            <button className="px-4 py-2.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-base cursor-pointer">
               Cast By Surname
             </button>
-            {/* <button className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-lg">
-              Cast Id
-            </button> */}
-            {/* <button className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-lg">
-              Both Mapping
-            </button> */}
-            <button className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-lg cursor-pointer">
+            <button className="px-4 py-2.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-base cursor-pointer">
               Report
             </button>
           </div>
 
           {/* Mobile Menu Button */}
           <div className="lg:hidden">
-            <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200">
+            <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
@@ -287,7 +320,7 @@ export default function Navbar() {
             ) : (
               <button
                 onClick={() => router.push('/login')}
-                className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+                className="px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium"
               >
                 Login
               </button>
@@ -310,10 +343,10 @@ export default function Navbar() {
             >
               Filter
             </button>
-            <div className="relative" data-dropdown="data-process">
+            <div className="relative col-span-2" data-dropdown="data-process">
               <button 
                 onClick={handleDataProcessClick}
-                className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-sm text-left cursor-pointer flex items-center justify-between w-full"
+                className="w-full px-3 py-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-sm text-left cursor-pointer flex items-center justify-between"
               >
                 <span>Data Process</span>
                 <ChevronDown size={14} className={`transition-transform ${dataProcessDropdown ? 'rotate-180' : ''}`} />
@@ -329,7 +362,7 @@ export default function Navbar() {
                       console.log('Event:', e);
                       handleSubMenuClick('By Surname');
                     }}
-                    className="w-full px-3 py-2 text-left text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors duration-200 text-sm"
+                    className="w-full px-3 py-2 text-left text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors duration-200 text-sm cursor-pointer"
                   >
                     By Surname
                   </button>
@@ -341,29 +374,35 @@ export default function Navbar() {
                       console.log('Event:', e);
                       handleSubMenuClick('Data Alteration');
                     }}
-                    className="w-full px-3 py-2 text-left text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors duration-200 text-sm"
+                    className="w-full px-3 py-2 text-left text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors duration-200 text-sm cursor-pointer"
                   >
                     Data Alteration
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('Mobile Village Mapping button clicked');
+                      console.log('Event:', e);
+                      handleSubMenuClick('Village Mapping');
+                    }}
+                    className="w-full px-3 py-2 text-left text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors duration-200 text-sm cursor-pointer"
+                  >
+                    Village Mapping
                   </button>
                 </div>
               )}
             </div>
-            <button className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-sm text-left cursor-pointer">
+            <button className="px-3 py-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-sm text-left cursor-pointer">
               Import / Export
             </button>
-            <button className="px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all duration-200 font-medium text-sm text-left cursor-pointer">
+            <button className="px-3 py-2.5 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-all duration-200 font-medium text-sm text-left cursor-pointer">
               Maps
             </button>
-            <button className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-sm text-left cursor-pointer">
+            <button className="px-3 py-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-sm text-left cursor-pointer">
               Cast By Surname
             </button>
-            {/* <button className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-sm text-left">
-              Cast Id
-            </button> */}
-            {/* <button className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-sm text-left">
-              Both Mapping
-            </button> */}
-            <button className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 font-medium text-sm text-left cursor-pointer">
+            <button className="px-3 py-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-sm text-left cursor-pointer">
               Report
             </button>
           </div>

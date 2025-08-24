@@ -551,6 +551,30 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
         // Clean up
         window.URL.revokeObjectURL(url);
         
+        // Log the export activity
+        try {
+          await fetch('http://localhost:5002/api/log', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              user_id: 1, // Default for demo
+              username: 'superadmin', // Default for demo
+              action_type: 'export',
+              action_details: `Exported filtered data as ${format.toUpperCase()}`,
+              filters_applied: filters,
+              data_count: 0, // Will be updated by backend
+              file_name: filename,
+              ip_address: null,
+              user_agent: navigator.userAgent
+            }),
+          });
+          console.log('✅ Activity logged successfully');
+        } catch (logError) {
+          console.error('⚠️ Failed to log activity:', logError);
+        }
+        
         alert(`✅ Data exported successfully as ${format.toUpperCase()}!`);
       } else {
         alert(`❌ Export failed: ${result.message || 'Unknown error'}`);

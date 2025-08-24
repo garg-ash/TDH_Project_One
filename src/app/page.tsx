@@ -1,13 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, Settings, LogOut, LogIn, Users } from 'lucide-react';
-import Link from 'next/link';
+import { ArrowRight, Settings } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import DataTable from '../components/DataTable';
 import Filter from '../components/Filter';
 import MasterFilter from '../components/MasterFilter';
-
 
 interface UserInfo {
   id: number;
@@ -34,25 +32,23 @@ function HomePage() {
     const token = localStorage.getItem('authToken');
     const userInfoStr = localStorage.getItem('userInfo');
     
+    if (!token) {
+      window.location.href = '/login';
+      return;
+    }
+
     if (token && userInfoStr) {
       try {
         const user = JSON.parse(userInfoStr);
         setUserInfo(user);
         setIsAuthenticated(true);
       } catch (error) {
-        // console.error('Error parsing user info:', error);
-        handleLogout();
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userInfo');
+        window.location.href = '/login';
       }
     }
   }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userInfo');
-    setIsAuthenticated(false);
-    setUserInfo(null);
-    window.location.href = '/login';
-  };
 
   const modules = [
     {
@@ -80,7 +76,6 @@ function HomePage() {
   };
 
   const handleMasterFilterChange = (filters: any) => {
-    console.log('Master filter changed:', filters);
     setMasterFilters({
       parliament: filters.parliament,
       assembly: filters.assembly,
@@ -90,8 +85,6 @@ function HomePage() {
   };
 
   const handleFilterChange = (filters: any) => {
-    console.log('📥 Received filters from Filter component:', filters);
-    console.log('🔧 Setting detailed filters in main page:', filters);
     setDetailedFilters(filters);
   };
 
@@ -99,10 +92,7 @@ function HomePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         <Navbar />
-        
-        
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header */}
           <div className="text-center py-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
               <Settings size={32} className="text-gray-600" />
@@ -115,7 +105,6 @@ function HomePage() {
             </p>
           </div>
 
-          {/* Modules Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
             {modules.map((module) => (
               <div
@@ -145,10 +134,8 @@ function HomePage() {
     );
   }
 
-  // Data Table Page
   return (
     <div>
-      {/* Back to Modules Button and Master Filter */}
       <div className="bg-gray-100 border-b border-gray-200 px-6 py-4">
         <div className="max-w-7xl flex items-center space-x-6">
           <button
@@ -166,7 +153,6 @@ function HomePage() {
       
       <Navbar />
       
-      {/* Filter and Data Table */}
       <Filter 
         masterFilters={masterFilters}
         onFilterChange={handleFilterChange} 
@@ -180,5 +166,3 @@ function HomePage() {
 }
 
 export default React.memo(HomePage);
-
-

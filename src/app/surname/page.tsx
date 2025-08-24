@@ -27,6 +27,8 @@ export default function SurnamePage() {
   const [error, setError] = useState<string | null>(null);
   const [surnameData, setSurnameData] = useState<SurnameData[]>([]);
   const [showTable, setShowTable] = useState(false);
+  const [processedData, setProcessedData] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     fname: '',
@@ -56,7 +58,7 @@ export default function SurnamePage() {
   });
 
   // Fetch surname data from API with master filters
-  const fetchSurnameData = async (filters?: any, page: number = 1) => {
+  const fetchSurnameData = async (filters?: any, page: number = 1, customItemsPerPage?: number) => {
     try {
       setLoading(true);
       setError(null); // Clear previous errors
@@ -67,7 +69,7 @@ export default function SurnamePage() {
         ...filters
       };
       
-      console.log('Fetching surname data with combined filters:', combinedFilters);
+      console.log(`🔍 Fetching surname data for page ${page} with combined filters:`, combinedFilters);
       
       // Build query parameters for the API
       const queryParams = new URLSearchParams();
@@ -97,11 +99,16 @@ export default function SurnamePage() {
         queryParams.append('count', countFilter);
       }
       
+      // Use custom items per page if provided, otherwise use current pagination state
+      const itemsPerPage = customItemsPerPage || pagination.itemsPerPage;
+      
       // Add pagination parameters
       queryParams.append('page', page.toString());
-      queryParams.append('limit', pagination.itemsPerPage.toString());
+      queryParams.append('limit', itemsPerPage.toString());
       
-      // Call the real API
+      console.log(`📊 Pagination params - Page: ${page}, Limit: ${itemsPerPage}, Custom: ${customItemsPerPage ? 'Yes' : 'No'}`);
+      
+      // Call the real API with pagination
       const response = await apiService.getSurnameData({
         name: combinedFilters.name,
         fname: combinedFilters.fname,
@@ -111,6 +118,8 @@ export default function SurnamePage() {
         district: combinedFilters.district,
         block: combinedFilters.block,
         count: countFilter,
+        page: page,
+        limit: itemsPerPage,
         // If no checkboxes selected, default to 'name' so data does not go blank
         sources: [
           nameChecked ? 'name' : null,
@@ -119,28 +128,57 @@ export default function SurnamePage() {
         ].filter(Boolean).join(',') || 'name'
       });
       
-      // Apply additional filters from the backend response
-      let filteredData = response;
+      console.log('🔍 API Response:', response);
       
-      // Apply count filter if specified
-      if (countFilter) {
-        const countValue = parseInt(countFilter);
-        filteredData = filteredData.filter(item => item.count > countValue);
+      // Handle new paginated response format
+      let data: SurnameData[], paginationInfo: any;
+      
+      if (response && typeof response === 'object' && 'data' in response && 'pagination' in response) {
+        // New paginated format
+        data = (response as any).data;
+        paginationInfo = (response as any).pagination;
+        console.log('✅ Using new paginated response format');
+      } else {
+        // Fallback to old format (array)
+        data = response as SurnameData[];
+        paginationInfo = {
+          currentPage: page,
+          itemsPerPage: pagination.itemsPerPage,
+          totalItems: data?.length || 0,
+          totalPages: Math.ceil((data?.length || 0) / pagination.itemsPerPage)
+        };
+        console.log('⚠️ Using fallback pagination format');
       }
       
-      // Update pagination state
-      const totalItems = filteredData.length;
-      const totalPages = Math.ceil(totalItems / pagination.itemsPerPage);
+      // Apply additional count filter if specified
+      let filteredData = data;
+      if (countFilter) {
+        const countValue = parseInt(countFilter);
+        filteredData = data.filter((item: SurnameData) => item.count > countValue);
+        console.log(`🔍 Applied count filter > ${countValue}: ${filteredData.length} items remaining`);
+      }
       
-      setPagination(prev => ({
-        ...prev,
-        currentPage: page,
-        totalItems,
-        totalPages: Math.max(1, totalPages)
-      }));
+      // Update pagination state with backend info
+      const newPaginationState = {
+        ...pagination,
+        currentPage: paginationInfo.currentPage || page,
+        itemsPerPage: customItemsPerPage || pagination.itemsPerPage, // Preserve custom items per page
+        totalItems: paginationInfo.totalItems || filteredData.length,
+        totalPages: Math.max(1, paginationInfo.totalPages || Math.ceil(filteredData.length / (customItemsPerPage || pagination.itemsPerPage)))
+      };
       
+      console.log(`🔄 Updating pagination state:`, {
+        old: pagination,
+        new: newPaginationState,
+        dataLength: filteredData.length,
+        customItemsPerPage,
+        calculatedTotalPages: Math.ceil(filteredData.length / (customItemsPerPage || pagination.itemsPerPage))
+      });
+      
+      setPagination(newPaginationState);
       setSurnameData(filteredData);
-      console.log(`✅ Fetched ${filteredData.length} surnames from API with filters:`, combinedFilters);
+      console.log(`✅ Fetched ${filteredData.length} surnames for page ${page} from API`);
+      console.log(`📊 Pagination: Page ${page}/${paginationInfo.totalPages || 1}, Total: ${paginationInfo.totalItems || filteredData.length}`);
       
     } catch (error) {
       console.error('Error fetching surname data:', error);
@@ -234,6 +272,8 @@ export default function SurnamePage() {
   const handlePageChange = (page: number) => {
     if (page < 1 || page > pagination.totalPages) return;
     
+    console.log(`🔄 Changing to page ${page} from current page ${pagination.currentPage}`);
+    
     setPagination(prev => ({ ...prev, currentPage: page }));
     
     // Fetch data for the new page
@@ -243,15 +283,24 @@ export default function SurnamePage() {
       mname: formData.mname
     };
     
+    console.log(`📊 Fetching data for page ${page} with filters:`, filters);
     fetchSurnameData(filters, page);
   };
 
   const handleItemsPerPageChange = (newItemsPerPage: number) => {
-    setPagination(prev => ({ 
-      ...prev, 
+    console.log(`🔄 Changing items per page from ${pagination.itemsPerPage} to ${newItemsPerPage}`);
+    
+    // Update pagination state first
+    const newPaginationState = {
+      ...pagination,
       itemsPerPage: newItemsPerPage,
       currentPage: 1 // Reset to first page
-    }));
+    };
+    
+    console.log(`📊 New pagination state:`, newPaginationState);
+    
+    // Update state immediately
+    setPagination(newPaginationState);
     
     // Fetch data with new page size
     const filters = {
@@ -260,7 +309,11 @@ export default function SurnamePage() {
       mname: formData.mname
     };
     
-    fetchSurnameData(filters, 1);
+    console.log(`📊 Fetching data with new page size ${newItemsPerPage} for page 1`);
+    console.log(`📊 Using pagination state:`, newPaginationState);
+    
+    // Fetch data with new page size - pass the new itemsPerPage
+    fetchSurnameData(filters, 1, newItemsPerPage);
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -294,6 +347,28 @@ export default function SurnamePage() {
     } catch (error) {
       console.error('Error saving surname update:', error);
       // Revert local state on error if needed
+    }
+  };
+
+  // Handle data processing
+  const handleProcessData = async (filteredData: SurnameData[]) => {
+    setIsProcessing(true);
+    try {
+      // Use API service to process the data
+      const result = await apiService.processSurnameData(filteredData);
+      
+      if (result.success) {
+        setProcessedData(result.processedData);
+        console.log('Data processed successfully:', result.message);
+      } else {
+        throw new Error(result.message || 'Failed to process data');
+      }
+      
+    } catch (error) {
+      console.error('Error processing data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to process data');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -521,6 +596,9 @@ export default function SurnamePage() {
             data={surnameData}
             loading={loading}
             onUpdateSurname={handleUpdateSurname}
+            onProcessData={handleProcessData}
+            processedData={processedData}
+            isProcessing={isProcessing}
             pagination={pagination}
             onPageChange={handlePageChange}
             onItemsPerPageChange={handleItemsPerPageChange}

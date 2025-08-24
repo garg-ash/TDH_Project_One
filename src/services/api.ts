@@ -46,6 +46,20 @@ export interface SurnameData {
   count: number;
   castId: string;
   castIda: string;
+  category_name?: string; // Optional category name field
+}
+
+export interface VillageMappingData {
+  id: number;
+  villageName: string;
+  district: string;
+  block: string;
+  gp: string;
+  assembly: string;
+  parliament: string;
+  totalVoters: number;
+  mappedStatus: 'Mapped' | 'Unmapped' | 'Partial';
+  lastUpdated: string;
 }
 
 export interface DivisionData {
@@ -161,6 +175,7 @@ export interface User {
   id: number;
   username: string;
   email: string;
+  mobile?: string;
   role: 'super_admin' | 'admin' | 'user';
   permissions: string[];
   isActive: boolean;
@@ -174,6 +189,7 @@ export interface CreateUserData {
   username: string;
   email: string;
   password: string;
+  mobile?: string;
   role: 'super_admin' | 'admin' | 'user';
   permissions: string[];
 }
@@ -181,6 +197,7 @@ export interface CreateUserData {
 export interface UpdateUserData {
   username?: string;
   email?: string;
+  mobile?: string;
   role?: 'super_admin' | 'admin' | 'user';
   permissions?: string[];
   isActive?: boolean;
@@ -413,14 +430,16 @@ class ApiService {
     block?: string;
     count?: number | string;
     sources?: string; // comma-separated: name,fname,mname
-  } = {}): Promise<SurnameData[]> {
+    page?: number;
+    limit?: number;
+  } = {}): Promise<{ data: SurnameData[]; pagination: { currentPage: number; itemsPerPage: number; totalItems: number; totalPages: number } }> {
     const entries = Object.entries(filters)
       .filter(([_, value]) => value !== undefined && value !== '')
       .map(([key, value]) => [key, String(value)] as [string, string]);
     const params = new URLSearchParams(entries);
 
     const response = await fetch(`${API_BASE_URL}/surname-data?${params}`);
-    return this.handleResponse<SurnameData[]>(response);
+    return this.handleResponse<{ data: SurnameData[]; pagination: { currentPage: number; itemsPerPage: number; totalItems: number; totalPages: number } }>(response);
   }
 
   // Update surname data
@@ -517,6 +536,79 @@ class ApiService {
     return this.handleResponse<{ status: string; message: string }>(response);
   }
 
+  // Village Mapping Data
+  async getVillageMappingData(filters: {
+    villageName?: string;
+    district?: string;
+    block?: string;
+    gp?: string;
+    assembly?: string;
+    parliament?: string;
+    mappedStatus?: 'Mapped' | 'Unmapped' | 'Partial';
+    totalVotersMin?: number;
+    totalVotersMax?: number;
+    lastUpdatedMin?: string;
+    lastUpdatedMax?: string;
+  } = {}): Promise<VillageMappingData[]> {
+    try {
+      const entries = Object.entries(filters)
+        .filter(([_, value]) => value !== undefined && value !== '')
+        .map(([key, value]) => [key, String(value)] as [string, string]);
+      const params = new URLSearchParams(entries);
+
+      const url = `${API_BASE_URL}/village-mapping?${params}`;
+      console.log('🔍 Making API call to:', url);
+      console.log('🔍 With filters:', filters);
+
+      const response = await fetch(url);
+      
+      console.log('🔍 Response status:', response.status);
+      console.log('🔍 Response statusText:', response.statusText);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: url,
+          errorText: errorText
+        });
+        
+        // Try to parse as JSON for better error details
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || 'Unknown error' };
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${errorData.error || response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ API Response data:', data);
+      return data;
+      
+    } catch (error) {
+      console.error('❌ Error in getVillageMappingData:', error);
+      throw error;
+    }
+  }
+
+  // Update Village Mapping Data
+  async updateVillageMapping(id: number, data: Partial<VillageMappingData>): Promise<{ success: boolean; message: string; updatedId: number; affectedRows: number }> {
+    const token = localStorage.getItem('authToken');
+    const endpoint = token ? `/village-mapping/${id}` : `/village-mapping/${id}/demo`;
+    const headers = token ? this.getAuthHeaders() : { 'Content-Type': 'application/json' };
+    
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(data),
+    });
+    return this.handleResponse<{ success: boolean; message: string; updatedId: number; affectedRows: number }>(response);
+  }
+
   // Get Division, District, PC, AC data
   async getDivisionData(): Promise<DivisionData[]> {
     const response = await fetch(`${API_BASE_URL}/div_dist_pc_ac`);
@@ -564,6 +656,16 @@ class ApiService {
       body: JSON.stringify({ currentPassword, newPassword }),
     });
     return this.handleResponse<{ success: boolean; message: string }>(response);
+  }
+
+  // Process surname data
+  async processSurnameData(data: SurnameData[]): Promise<{ success: boolean; processedData: any; message: string; totalRecords: number }> {
+    const response = await fetch(`${API_BASE_URL}/process-surname-data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+    });
+    return this.handleResponse<{ success: boolean; processedData: any; message: string; totalRecords: number }>(response);
   }
 }
 

@@ -8,15 +8,18 @@ import {
   flexRender,
   ColumnDef,
 } from '@tanstack/react-table';
+import ProcessedDataTable from './ProcessedDataTable';
 
 // Interface for surname data
 export interface SurnameData {
   id: number;
-  name?: string; // Make name field optional since backend might not always return it
+  name: string; // Name field to extract surname from
   surname: string;
   count: number;
   castId: string;
   castIda: string;
+  castIdFromOtherTable?: string; // Will come from other database table
+  castIdaFromOtherTable?: string; // Will come from other database table
 }
 
 // Helper function to extract surname from name (last word)
@@ -26,6 +29,7 @@ const extractSurname = (name: string): string => {
   // Only show surname if multiple words, otherwise blank
   return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
 };
+
 
 // Excel-like Cell Component for Surname Table
 interface SurnameExcelCellProps {
@@ -207,12 +211,12 @@ const columns: ColumnDef<SurnameData>[] = [
   },
   {
     accessorKey: 'castId',
-    header: 'Cast ID',
+    header: 'Cast',
     size: 150,
   },
   {
     accessorKey: 'castIda',
-    header: 'Cast IDA',
+    header: 'Cast Category',
     size: 150,
   },
   {
@@ -225,12 +229,26 @@ const columns: ColumnDef<SurnameData>[] = [
     header: 'Count',
     size: 120,
   },
+  {
+    accessorKey: 'castIdFromOtherTable',
+    header: 'Cast Id',
+    size: 150,
+  },
+  {
+    accessorKey: 'castIdaFromOtherTable',
+    header: 'Cast IDA',
+    size: 150,
+  },
 ];
 
 interface SurnameDataTableProps {
   data: SurnameData[];
   loading: boolean;
   onUpdateSurname: (id: number, surnameData: Partial<SurnameData>) => Promise<void>;
+  // Add new props for processing
+  onProcessData?: (filteredData: SurnameData[]) => Promise<any>;
+  processedData?: any;
+  isProcessing?: boolean;
   // Pagination props
   pagination?: {
     currentPage: number;
@@ -247,6 +265,9 @@ export default function SurnameDataTable({
   data, 
   loading, 
   onUpdateSurname,
+  onProcessData,
+  processedData,
+  isProcessing = false,
   pagination,
   onPageChange,
   onItemsPerPageChange,
@@ -258,6 +279,10 @@ export default function SurnameDataTable({
   const [editValue, setEditValue] = useState('');
   const [focusedCell, setFocusedCell] = useState<{row: number, column: string} | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
+  
+  // Add state for processed data view
+  const [showProcessedData, setShowProcessedData] = useState(false);
+  const [processingData, setProcessingData] = useState(false);
 
   const columnIds = useMemo(() => {
     const ids = columns.map(col => {
@@ -492,6 +517,21 @@ export default function SurnameDataTable({
     setEditValue('');
   }, []);
 
+  // Handle process button click
+  const handleProcessData = async () => {
+    if (!onProcessData || !data || data.length === 0) return;
+    
+    setProcessingData(true);
+    try {
+      await onProcessData(data);
+      setShowProcessedData(true);
+    } catch (error) {
+      console.error('Error processing data:', error);
+    } finally {
+      setProcessingData(false);
+    }
+  };
+
   // Focus the selected cell
   useEffect(() => {
     if (selectedCell && !editingCell) {
@@ -564,9 +604,17 @@ export default function SurnameDataTable({
 
   // Pre-compute the table body
   const tableBody = useMemo(() => {
-    // Show only first 100 rows by default, let pagination handle the rest
-    const maxVisibleRows = 100;
+    // Use pagination itemsPerPage instead of hardcoded 100
+    const maxVisibleRows = pagination?.itemsPerPage || 100;
     const totalRows = loading ? maxVisibleRows : Math.min(maxVisibleRows, data?.length || 0);
+    
+    console.log(`📊 Table Body Debug:`, {
+      itemsPerPage: pagination?.itemsPerPage,
+      maxVisibleRows,
+      dataLength: data?.length,
+      totalRows,
+      paginationState: pagination
+    });
     
     return Array.from({ length: totalRows }).map((_, index) => {
       const isDataRow = !loading && data && index < data.length;
@@ -592,7 +640,7 @@ export default function SurnameDataTable({
                     columnId === 'select' 
                       ? index + 1 
                       : columnId === 'surname' && isDataRow && rowData
-                        ? extractSurname(rowData.name || '') // Extract surname from name, handle optional field
+                        ? extractSurname(rowData.name || '') // Extract surname from name field
                         : isDataRow && rowData 
                           ? (rowData[columnId as keyof SurnameData] || '') 
                           : ''
@@ -618,7 +666,28 @@ export default function SurnameDataTable({
         </tr>
       );
     });
-  }, [data, loading, selectedCell?.row, selectedCell?.column, focusedCell?.row, focusedCell?.column, editingCell?.row, editingCell?.column, editValue, columnIds, handleCellClick, handleCellDoubleClick, handleCellKeyDown, handleUpdateData, handleUpdateAndNavigate, setEditValue, handleStopEditing]);
+  }, [data, loading, selectedCell?.row, selectedCell?.column, focusedCell?.row, focusedCell?.column, editingCell?.row, editingCell?.column, editValue, columnIds, handleCellClick, handleCellDoubleClick, handleCellKeyDown, handleUpdateData, handleUpdateAndNavigate, setEditValue, handleStopEditing, pagination?.itemsPerPage]);
+
+  // Show processed data table if available
+  if (showProcessedData && processedData) {
+    return (
+      <div className="bg-white h-screen w-full overflow-hidden relative">
+        {/* Header with back button */}
+        <div className="bg-gray-50 px-6 py-3 border-b border-gray-200 flex justify-between items-center">
+          <h2 className="text-lg font-semibold text-gray-800">Processed Results</h2>
+          <button
+            onClick={() => setShowProcessedData(false)}
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+          >
+            ← Back to Surname Data
+          </button>
+        </div>
+        
+        {/* Processed Data Table will be rendered here */}
+        <ProcessedDataTable data={processedData} />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -640,7 +709,7 @@ export default function SurnameDataTable({
           <div className="text-gray-600 text-lg font-medium mb-2">No Filters Selected</div>
           <div className="text-gray-500 mb-4">Please select filters and click "Go" to view surname data</div>
           <div className="text-sm text-gray-400">
-            Select one or more filters (Name, Father's Name, Mother's Name) and click "Go" to get started
+            Select one or more filters (Religion, Cast Category, Cast, Surname) and click "Go" to get started
           </div>
         </div>
       </div>
@@ -649,6 +718,31 @@ export default function SurnameDataTable({
 
   return (
     <div className="bg-white h-screen w-full overflow-hidden relative" style={{ border: '1px solid #d1d5db' }}>
+      {/* Add Process Button */}
+      {data && data.length > 0 && (
+        <div className="bg-blue-50 px-6 py-3 border-b border-blue-200">
+          <div className="flex justify-between items-center">
+            <div className="text-blue-800">
+              <span className="font-medium">{data.length}</span> records filtered
+            </div>
+            <button
+              onClick={handleProcessData}
+              disabled={processingData || !onProcessData}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+            >
+              {processingData ? (
+                <span className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Processing...
+                </span>
+              ) : (
+                'Process Data'
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Excel-like DataGrid */}
       <div className="h-full w-full overflow-auto pb-16" ref={tableRef}>
         <table className="border-collapse w-full" style={{ borderSpacing: 0, tableLayout: 'fixed' }}>

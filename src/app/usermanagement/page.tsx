@@ -5,6 +5,8 @@ import { Users, UserPlus, Trash2, Edit, ArrowLeft, User } from 'lucide-react';
 import Link from 'next/link';
 import { AdminOnly } from '../../components/ProtectedRoute';
 import { apiService } from '../../services/api';
+import Navbar from '../../components/Navbar';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ManagedUser {
   id: number;
@@ -14,14 +16,18 @@ interface ManagedUser {
 }
 
 export default function UserManagementPage() {
+  const { hasRole } = useAuth();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
     email: '',
     password: '',
-    role: 'admin' as 'admin',
+    mobile: '',
+    role: 'user' as 'user' | 'admin' | 'super_admin',
   });
+  const [editUserId, setEditUserId] = useState<number | null>(null);
+  const [editData, setEditData] = useState<{ email: string; mobile?: string; role: 'user'|'admin'|'super_admin' }>({ email: '', mobile: '', role: 'user' });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -39,6 +45,26 @@ export default function UserManagementPage() {
     }
   };
 
+  const handleDeleteUser = async (id: number) => {
+    const confirm = window.confirm('Are you sure you want to delete this user?');
+    if (!confirm) return;
+    try {
+      setLoading(true);
+      const res = await apiService.deleteUser(id);
+      if (res.success) {
+        setMessage('User deleted successfully');
+        await fetchUsers();
+      } else {
+        setMessage(res.message || 'Failed to delete user');
+      }
+    } catch (error: any) {
+      console.error('Delete user error:', error);
+      setMessage(error?.message || 'Failed to delete user');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -49,7 +75,7 @@ export default function UserManagementPage() {
       const res = await apiService.createUser(payload);
       if (res.success) {
         setMessage('User created successfully!');
-        setFormData({ username: '', email: '', password: '', role: 'admin' });
+        setFormData({ username: '', email: '', password: '', mobile: '', role: 'user' });
         setShowCreateForm(false);
         fetchUsers();
       } else {
@@ -62,9 +88,41 @@ export default function UserManagementPage() {
     }
   };
 
+  const openEdit = (u: any) => {
+    setEditUserId(u.id);
+    setEditData({ email: u.email || '', mobile: (u as any).mobile || '', role: u.role });
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editUserId == null) return;
+    try {
+      setLoading(true);
+      const res = await apiService.updateUser(editUserId, {
+        email: editData.email,
+        role: editData.role,
+        // mobile_no is mapped as mobile on API; backend maps to mobile_no
+        mobile: editData.mobile,
+      } as any);
+      if (res.success) {
+        setMessage('User updated successfully');
+        setEditUserId(null);
+        await fetchUsers();
+      } else {
+        setMessage(res.message || 'Failed to update user');
+      }
+    } catch (error: any) {
+      console.error('Update user error:', error);
+      setMessage(error?.message || 'Failed to update user');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <AdminOnly>
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200">
+        <Navbar />
         <div className="bg-white/80 backdrop-blur-sm shadow-lg border-b border-gray-200/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-20">
@@ -111,7 +169,11 @@ export default function UserManagementPage() {
                 <p className="text-gray-600 text-lg">Create and manage system users</p>
               </div>
               <button
-                onClick={() => setShowCreateForm(true)}
+                onClick={() => {
+                  setFormData({ username: '', email: '', mobile: '', password: '', role: 'user' });
+                  setMessage('');
+                  setShowCreateForm(true);
+                }}
                 className="inline-flex items-center px-6 py-3 border border-transparent text-base font-semibold rounded-xl shadow-lg text-white bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 transform hover:scale-105 active:scale-95"
               >
                 <UserPlus className="w-5 h-5 mr-2" />
@@ -123,7 +185,7 @@ export default function UserManagementPage() {
           {showCreateForm && (
             <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-8">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-gray-800">Create New Admin</h3>
+                <h3 className="text-2xl font-bold text-gray-800">Create New User</h3>
                 <button onClick={() => setShowCreateForm(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -131,7 +193,7 @@ export default function UserManagementPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleCreateUser} className="space-y-6">
+              <form onSubmit={handleCreateUser} className="space-y-6" autoComplete="off">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label htmlFor="username" className="block text-sm font-semibold text-gray-700">Username</label>
@@ -141,6 +203,7 @@ export default function UserManagementPage() {
                       required
                       value={formData.username}
                       onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      autoComplete="off"
                       className="block w-full px-4 py-3 border-2 border-gray-200 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all duration-200 bg-white/50 backdrop-blur-sm"
                       placeholder="Enter username"
                     />
@@ -153,8 +216,21 @@ export default function UserManagementPage() {
                       required
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      autoComplete="off"
                       className="block w-full px-4 py-3 border-2 border-gray-200 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all duration-200 bg-white/50 backdrop-blur-sm"
                       placeholder="Enter email address"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="mobile" className="block text-sm font-semibold text-gray-700">Mobile Number</label>
+                    <input
+                      type="tel"
+                      id="mobile"
+                      value={formData.mobile}
+                      onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                      autoComplete="off"
+                      className="block w-full px-4 py-3 border-2 border-gray-200 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                      placeholder="Enter mobile number"
                     />
                   </div>
                   <div className="space-y-2">
@@ -165,19 +241,23 @@ export default function UserManagementPage() {
                       required
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      autoComplete="new-password"
                       className="block w-full px-4 py-3 border-2 border-gray-200 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all duration-200 bg-white/50 backdrop-blur-sm"
                       placeholder="Enter password"
                     />
                   </div>
                   <div className="space-y-2">
                     <label className="block text-sm font-semibold text-gray-700">Role</label>
-                    <input
-                      type="text"
+                    <select
                       value={formData.role}
-                      disabled
-                      className="block w-full px-4 py-3 border-2 border-gray-200 rounded-xl shadow-sm bg-gray-50 text-gray-600"
-                    />
-                    <p className="text-xs text-gray-500">Only admins can be created here.</p>
+                      onChange={(e) => setFormData({ ...formData, role: e.target.value as 'user' | 'admin' | 'super_admin' })}
+                      className="block w-full px-4 py-3 border-2 border-gray-200 rounded-xl shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400"
+                    >
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                      {hasRole(['super_admin']) && <option value="super_admin">Super Admin</option>}
+                    </select>
+                    <p className="text-xs text-gray-500">Choose the appropriate role for the new account.</p>
                   </div>
                 </div>
 
@@ -253,11 +333,20 @@ export default function UserManagementPage() {
                       </td>
                       <td className="px-8 py-6">
                         <div className="flex items-center space-x-3">
-                          <button className="text-blue-600 hover:text-blue-800 p-2 rounded-lg hover:bg-blue-50 transition-all duration-200" title="Edit (coming soon)">
+                          <button className="text-blue-600 hover:text-blue-800 p-2 rounded-lg hover:bg-blue-50 transition-all duration-200" title="Edit" onClick={() => openEdit(user)}>
                             <Edit className="w-4 h-4" />
                           </button>
-                          <button className="text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50 transition-all duration-200" title="Delete (coming soon)">
-                            <Trash2 className="w-4 h-4" />
+                          <button
+                            onClick={() => handleDeleteUser(user.id)}
+                            className="text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50 transition-all duration-200"
+                            title="Delete"
+                            disabled={loading}
+                          >
+                            {loading ? (
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
                           </button>
                         </div>
                       </td>
@@ -280,6 +369,53 @@ export default function UserManagementPage() {
           </div>
         </div>
       </div>
+
+      {editUserId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-200">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Edit User</h3>
+              <button onClick={() => setEditUserId(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <form onSubmit={handleUpdateUser} className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <input
+                  type="email"
+                  value={editData.email}
+                  onChange={(e) => setEditData({ ...editData, email: e.target.value })}
+                  className="mt-1 block w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Mobile</label>
+                <input
+                  type="tel"
+                  value={editData.mobile || ''}
+                  onChange={(e) => setEditData({ ...editData, mobile: e.target.value })}
+                  className="mt-1 block w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Role</label>
+                <select
+                  value={editData.role}
+                  onChange={(e) => setEditData({ ...editData, role: e.target.value as 'user'|'admin'|'super_admin' })}
+                  className="mt-1 block w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400"
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                  {hasRole(['super_admin']) && <option value="super_admin">Super Admin</option>}
+                </select>
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setEditUserId(null)} className="px-5 py-2 rounded-xl border-2 border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" disabled={loading} className="px-6 py-2 rounded-xl bg-gray-700 text-white hover:bg-gray-800 disabled:opacity-50">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </AdminOnly>
   );
 }

@@ -17,10 +17,12 @@ import {
 } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 import Link from 'next/link';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function DashboardPage() {
   const [userInfo, setUserInfo] = useState<any>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { user, hasRole } = useAuth();
 
   useEffect(() => {
     const token = localStorage.getItem('authToken');
@@ -85,13 +87,6 @@ export default function DashboardPage() {
       color: 'bg-green-500 hover:bg-green-600'
     },
     {
-      title: 'User Management',
-      description: 'Manage system users and permissions',
-      icon: <Users className="w-6 h-6" />,
-      link: '/usermanagement',
-      color: 'bg-purple-500 hover:bg-purple-600'
-    },
-    {
       title: 'System Setup',
       description: 'Configure system parameters',
       icon: <Settings className="w-6 h-6" />,
@@ -119,37 +114,58 @@ export default function DashboardPage() {
               <h1 className="text-2xl font-bold text-gray-900">Rajasthan Dashboard</h1>
               <span className="text-sm text-gray-500">Election Management System</span>
             </div>
+            {/* User Management Link - Only visible to admin and super_admin */}
+            {hasRole(['admin', 'super_admin']) && (
+              <div className="flex items-center space-x-2">
+                {/* Desktop version */}
+                <Link
+                  href="/usermanagement"
+                  className="hidden md:flex items-center space-x-2 px-4 py-2 rounded-lg bg-gray-500 hover:bg-gray-600 text-white transition-colors"
+                >
+                  <Users className="w-5 h-5" />
+                  <span className="font-medium">User Management</span>
+                </Link>
+                {/* Mobile version */}
+                <Link
+                  href="/usermanagement"
+                  className="md:hidden p-2 rounded-lg bg-purple-500 hover:bg-purple-600 text-white transition-colors"
+                  title="User Management"
+                >
+                  <Users className="w-6 h-6" />
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                 {/* Welcome Section */}
-         <div className="bg-gradient-to-r from-slate-700 to-slate-800 rounded-xl p-6 mb-6 text-white">
-           <div className="flex items-center justify-between">
-             <div>
-               <h2 className="text-2xl font-bold mb-2">Rajasthan Election Dashboard</h2>
-               <p className="text-slate-200">Monitor Rajasthan election data, track voter statistics, and manage system operations</p>
-               <div className="mt-3 flex items-center space-x-4 text-sm">
-                 <span className="flex items-center">
-                   <MapPin className="w-4 h-4 mr-1 text-slate-300" />
-                   {dashboardData.rajasthanStats.area}
-                 </span>
-                 <span className="flex items-center">
-                   <Users className="w-4 h-4 mr-1 text-slate-300" />
-                   {dashboardData.rajasthanStats.totalPopulation}
-                 </span>
-                 <span className="flex items-center">
-                   <FileText className="w-4 h-4 mr-1 text-slate-300" />
-                   {dashboardData.rajasthanStats.literacyRate} Literacy
-                 </span>
-               </div>
-             </div>
-             <div className="hidden md:block">
-               <Calendar className="w-16 h-16 text-slate-400" />
-             </div>
-           </div>
-         </div>
+        {/* Welcome Section */}
+        <div className="bg-gradient-to-r from-slate-700 to-slate-800 rounded-xl p-6 mb-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold mb-2">Rajasthan Election Dashboard</h2>
+              <p className="text-slate-200">Monitor Rajasthan election data, track voter statistics, and manage system operations</p>
+              <div className="mt-3 flex items-center space-x-4 text-sm">
+                <span className="flex items-center">
+                  <MapPin className="w-4 h-4 mr-1 text-slate-300" />
+                  {dashboardData.rajasthanStats.area}
+                </span>
+                <span className="flex items-center">
+                  <Users className="w-4 h-4 mr-1 text-slate-300" />
+                  {dashboardData.rajasthanStats.totalPopulation}
+                </span>
+                <span className="flex items-center">
+                  <FileText className="w-4 h-4 mr-1 text-slate-300" />
+                  {dashboardData.rajasthanStats.literacyRate} Literacy
+                </span>
+              </div>
+            </div>
+            <div className="hidden md:block">
+              <Calendar className="w-16 h-16 text-slate-400" />
+            </div>
+          </div>
+        </div>
 
         {/* Key Statistics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -315,97 +331,97 @@ export default function DashboardPage() {
           </div>
         </div>
 
-                 {/* Voter Demographics Chart */}
-         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-           <h3 className="text-lg font-semibold text-gray-900 mb-4">Voter Demographics</h3>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-             <div>
-               <h4 className="text-md font-medium text-gray-700 mb-3">Gender Distribution</h4>
-               <div className="space-y-3">
-                 <div className="flex items-center justify-between">
-                   <span className="text-sm text-gray-600">Male</span>
-                   <div className="flex items-center space-x-2">
-                     <div className="w-32 bg-gray-200 rounded-full h-2">
-                       <div className="bg-slate-600 h-2 rounded-full" style={{ width: `${dashboardData.voterDemographics.male}%` }}></div>
-                     </div>
-                     <span className="text-sm font-medium text-gray-900">{dashboardData.voterDemographics.male}%</span>
-                   </div>
-                 </div>
-                 <div className="flex items-center justify-between">
-                   <span className="text-sm text-gray-600">Female</span>
-                   <div className="flex items-center space-x-2">
-                     <div className="w-32 bg-gray-200 rounded-full h-2">
-                       <div className="bg-slate-400 h-2 rounded-full" style={{ width: `${dashboardData.voterDemographics.female}%` }}></div>
-                     </div>
-                     <span className="text-sm font-medium text-gray-900">{dashboardData.voterDemographics.female}%</span>
-                   </div>
-                 </div>
-               </div>
-             </div>
-             <div>
-               <h4 className="text-md font-medium text-gray-700 mb-3">Geographic Distribution</h4>
-               <div className="space-y-3">
-                 <div className="flex items-center justify-between">
-                   <span className="text-sm text-gray-600">Urban</span>
-                   <div className="flex items-center space-x-2">
-                     <div className="w-32 bg-gray-200 rounded-full h-2">
-                       <div className="bg-slate-500 h-2 rounded-full" style={{ width: `${dashboardData.voterDemographics.urban}%` }}></div>
-                     </div>
-                     <span className="text-sm font-medium text-gray-900">{dashboardData.voterDemographics.urban}%</span>
-                   </div>
-                 </div>
-                 <div className="flex items-center justify-between">
-                   <span className="text-sm text-gray-600">Rural</span>
-                   <div className="flex items-center space-x-2">
-                     <div className="w-32 bg-gray-200 rounded-full h-2">
-                       <div className="bg-slate-700 h-2 rounded-full" style={{ width: `${dashboardData.voterDemographics.rural}%` }}></div>
-                     </div>
-                     <span className="text-sm font-medium text-gray-900">{dashboardData.voterDemographics.rural}%</span>
-                   </div>
-                 </div>
-               </div>
-             </div>
-           </div>
-         </div>
+        {/* Voter Demographics Chart */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Voter Demographics</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <h4 className="text-md font-medium text-gray-700 mb-3">Gender Distribution</h4>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Male</span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-32 bg-gray-200 rounded-full h-2">
+                      <div className="bg-slate-600 h-2 rounded-full" style={{ width: `${dashboardData.voterDemographics.male}%` }}></div>
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">{dashboardData.voterDemographics.male}%</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Female</span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-32 bg-gray-200 rounded-full h-2">
+                      <div className="bg-slate-400 h-2 rounded-full" style={{ width: `${dashboardData.voterDemographics.female}%` }}></div>
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">{dashboardData.voterDemographics.female}%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-md font-medium text-gray-700 mb-3">Geographic Distribution</h4>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Urban</span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-32 bg-gray-200 rounded-full h-2">
+                      <div className="bg-slate-500 h-2 rounded-full" style={{ width: `${dashboardData.voterDemographics.urban}%` }}></div>
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">{dashboardData.voterDemographics.urban}%</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Rural</span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-32 bg-gray-200 rounded-full h-2">
+                      <div className="bg-slate-700 h-2 rounded-full" style={{ width: `${dashboardData.voterDemographics.rural}%` }}></div>
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">{dashboardData.voterDemographics.rural}%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-         {/* Rajasthan Regional Information */}
-         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-           <h3 className="text-lg font-semibold text-gray-900 mb-4">Rajasthan Regional Information</h3>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-             <div>
-               <h4 className="text-md font-medium text-gray-700 mb-3">Major Cities</h4>
-               <div className="grid grid-cols-2 gap-3">
-                 {dashboardData.rajasthanStats.majorCities.map((city, index) => (
-                   <div key={index} className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg">
-                     <MapPin className="w-4 h-4 text-slate-500" />
-                     <span className="text-sm font-medium text-gray-900">{city}</span>
-                   </div>
-                 ))}
-               </div>
-             </div>
-             <div>
-               <h4 className="text-md font-medium text-gray-700 mb-3">State Overview</h4>
-               <div className="space-y-3">
-                 <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                   <span className="text-sm text-gray-600">Total Area</span>
-                   <span className="text-sm font-medium text-gray-900">{dashboardData.rajasthanStats.area}</span>
-                 </div>
-                 <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                   <span className="text-sm text-gray-600">Population</span>
-                   <span className="text-sm font-medium text-gray-900">{dashboardData.rajasthanStats.totalPopulation}</span>
-                 </div>
-                 <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                   <span className="text-sm text-gray-600">Literacy Rate</span>
-                   <span className="text-sm font-medium text-gray-900">{dashboardData.rajasthanStats.literacyRate}</span>
-                 </div>
-                 <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                   <span className="text-sm text-gray-600">Assembly Seats</span>
-                   <span className="text-sm font-medium text-gray-900">{dashboardData.totalConstituencies}</span>
-                 </div>
-               </div>
-             </div>
-           </div>
-         </div>
+        {/* Rajasthan Regional Information */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Rajasthan Regional Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <h4 className="text-md font-medium text-gray-700 mb-3">Major Cities</h4>
+              <div className="grid grid-cols-2 gap-3">
+                {dashboardData.rajasthanStats.majorCities.map((city, index) => (
+                  <div key={index} className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg">
+                    <MapPin className="w-4 h-4 text-slate-500" />
+                    <span className="text-sm font-medium text-gray-900">{city}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h4 className="text-md font-medium text-gray-700 mb-3">State Overview</h4>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                  <span className="text-sm text-gray-600">Total Area</span>
+                  <span className="text-sm font-medium text-gray-900">{dashboardData.rajasthanStats.area}</span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                  <span className="text-sm text-gray-600">Population</span>
+                  <span className="text-sm font-medium text-gray-900">{dashboardData.rajasthanStats.totalPopulation}</span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                  <span className="text-sm text-gray-600">Literacy Rate</span>
+                  <span className="text-sm font-medium text-gray-900">{dashboardData.rajasthanStats.literacyRate}</span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                  <span className="text-sm text-gray-600">Assembly Seats</span>
+                  <span className="text-sm font-medium text-gray-900">{dashboardData.totalConstituencies}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
