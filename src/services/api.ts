@@ -641,6 +641,15 @@ class ApiService {
     return this.handleResponse<{ success: boolean; message: string }>(response);
   }
 
+  async updateUserPassword(id: number, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/users/${id}/password`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ newPassword }),
+    });
+    return this.handleResponse<{ success: boolean; message: string }>(response);
+  }
+
   async deleteUser(id: number): Promise<{ success: boolean; message: string }> {
     const response = await fetch(`${API_BASE_URL}/auth/users/${id}`, {
       method: 'DELETE',

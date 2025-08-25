@@ -13,7 +13,7 @@ import ProcessedDataTable from './ProcessedDataTable';
 // Interface for surname data
 export interface SurnameData {
   id: number;
-  name: string; // Name field to extract surname from
+  name?: string; // Name field to extract surname from (optional)
   surname: string;
   count: number;
   castId: string;
@@ -23,7 +23,7 @@ export interface SurnameData {
 }
 
 // Helper function to extract surname from name (last word)
-const extractSurname = (name: string): string => {
+const extractSurname = (name?: string): string => {
   if (!name) return '';
   const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
   // Only show surname if multiple words, otherwise blank

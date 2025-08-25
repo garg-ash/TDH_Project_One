@@ -275,7 +275,9 @@ export default function ExcelDataTable<T extends GenericData>({
       // Clear selection range for Ctrl+Click
       setSelectionRange(null);
     } else {
-      setSelectedCells(new Set([`${rowIndex}-${columnId}`]));
+      // Single cell selection - clear previous selections and select only this cell
+      const clickedCellKey = `${rowIndex}-${columnId}`;
+      setSelectedCells(new Set([clickedCellKey]));
       setSelectedCell({ row: rowIndex, column: columnId });
       setFocusedCell({ row: rowIndex, column: columnId });
       
@@ -283,7 +285,8 @@ export default function ExcelDataTable<T extends GenericData>({
       setSelectionRange(null);
     }
     
-    if (editingCell) {
+    // Always clear editing mode when clicking on a different cell
+    if (editingCell && (editingCell.row !== rowIndex || editingCell.column !== columnId)) {
       setEditingCell(null);
       setEditValue('');
     }
@@ -530,7 +533,16 @@ export default function ExcelDataTable<T extends GenericData>({
         }
         
         if (data[rowIndexNum]) {
-          csvData += (data[rowIndexNum][columnId] || '') + '\t';
+          // Get the cell value - handle different data types
+          let cellValue = data[rowIndexNum][columnId];
+          if (cellValue === null || cellValue === undefined) {
+            cellValue = '';
+          } else if (typeof cellValue === 'object') {
+            cellValue = JSON.stringify(cellValue);
+          } else {
+            cellValue = String(cellValue);
+          }
+          csvData += cellValue + '\t';
         }
         currentRow = rowIndexNum;
       });
@@ -703,6 +715,13 @@ export default function ExcelDataTable<T extends GenericData>({
             e.stopPropagation();
             if (selectedCells.size > 0) {
               copySelectedCellsToClipboard();
+            } else if (selectedCell) {
+              // If no cells are selected but a cell is focused, copy that single cell
+              const singleCell = new Set([`${selectedCell.row}-${selectedCell.column}`]);
+              setSelectedCells(singleCell);
+              setTimeout(() => {
+                copySelectedCellsToClipboard();
+              }, 0);
             }
             return;
             
@@ -885,10 +904,22 @@ export default function ExcelDataTable<T extends GenericData>({
           }
         }
       } else {
+        // Handle keyboard events when not editing
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'F2', 'Delete', 'Backspace'].includes(e.key)) {
           handleCellKeyDown(e, rowIndex, columnId);
           e.preventDefault();
           e.stopPropagation();
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+          // Handle Ctrl+C when not editing - copy the cell value
+          e.preventDefault();
+          e.stopPropagation();
+          const cellValue = String(value || '');
+          navigator.clipboard.writeText(cellValue).then(() => {
+            triggerCopyBlinkEffect();
+            console.log('Copied cell value:', cellValue);
+          }).catch(err => {
+            console.error('Failed to copy cell value:', err);
+          });
         }
       }
     };
@@ -957,7 +988,8 @@ export default function ExcelDataTable<T extends GenericData>({
       selectionStyle = {
         border: '2px solid #000000',
         zIndex: 1,
-        position: 'relative' as const
+        position: 'relative' as const,
+        backgroundColor: '#e8f4fd' // Light blue background for selected cell
       };
     } else if (isInSelectionRange && !isEditing) {
       selectionStyle = {
@@ -965,6 +997,11 @@ export default function ExcelDataTable<T extends GenericData>({
         border: '1px solid #2196f3',
         zIndex: 1,
         position: 'relative' as const
+      };
+    } else if (isFocused && !isEditing) {
+      selectionStyle = {
+        border: '1px solid #1976d2',
+        backgroundColor: '#f5f5f5'
       };
     }
 

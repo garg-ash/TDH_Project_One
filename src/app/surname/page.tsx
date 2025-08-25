@@ -109,6 +109,7 @@ export default function SurnamePage() {
       console.log(`📊 Pagination params - Page: ${page}, Limit: ${itemsPerPage}, Custom: ${customItemsPerPage ? 'Yes' : 'No'}`);
       
       // Call the real API with pagination
+      console.log(`🔍 Sending API request with count filter: ${countFilter}`);
       const response = await apiService.getSurnameData({
         name: combinedFilters.name,
         fname: combinedFilters.fname,
@@ -150,13 +151,8 @@ export default function SurnamePage() {
         console.log('⚠️ Using fallback pagination format');
       }
       
-      // Apply additional count filter if specified
+      // Count filter is already applied by the backend, no need to filter again
       let filteredData = data;
-      if (countFilter) {
-        const countValue = parseInt(countFilter);
-        filteredData = data.filter((item: SurnameData) => item.count > countValue);
-        console.log(`🔍 Applied count filter > ${countValue}: ${filteredData.length} items remaining`);
-      }
       
       // Update pagination state with backend info
       const newPaginationState = {
@@ -212,6 +208,20 @@ export default function SurnamePage() {
       }
     }
   }, [masterFilters, showTable]);
+
+  // Effect to refetch data when count filter changes
+  useEffect(() => {
+    if (showTable && countFilter !== undefined) {
+      console.log('Count filter changed, refetching surname data:', countFilter);
+      // Fetch data with current form filters and new count filter
+      const currentFilters = {
+        name: formData.name,
+        fname: formData.fname,
+        mname: formData.mname
+      };
+      fetchSurnameData(currentFilters);
+    }
+  }, [countFilter, showTable]);
 
   const handleMasterFilterChange = (filters: any) => {
     console.log('Master filter changed:', filters);
