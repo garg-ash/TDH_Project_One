@@ -1,8 +1,11 @@
 'use client';
+
 import MasterFilter from "@/components/MasterFilter";
 import Navbar from "@/components/Navbar";
 import React, { useEffect, useState } from "react";
 import { ArrowRight } from 'lucide-react';
+import ImportData from "@/components/ImportData";
+import ExportData from "@/components/ExportData";
 
 interface ActivityLog {
   id: number;
@@ -23,6 +26,7 @@ export default function ImportExportPage() {
   const [filterType, setFilterType] = useState('all');
   const [dateRange, setDateRange] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [dataCount, setDataCount] = useState<number>(0);
   
   // Master filter state
   const [masterFilters, setMasterFilters] = useState<{
@@ -34,6 +38,7 @@ export default function ImportExportPage() {
 
   useEffect(() => {
     fetchLogs();
+    fetchDataCount();
   }, [filterType, dateRange, masterFilters]);
 
   const fetchLogs = async () => {
@@ -58,6 +63,34 @@ export default function ImportExportPage() {
       console.error('Error fetching logs:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Function to fetch real data count
+  const fetchDataCount = async () => {
+    try {
+      // Build query parameters for data count
+      const params = new URLSearchParams();
+      params.append('count', 'true');
+      
+      // Add master filters if they exist
+      if (masterFilters.parliament) params.append('parliament', masterFilters.parliament);
+      if (masterFilters.assembly) params.append('assembly', masterFilters.assembly);
+      if (masterFilters.district) params.append('district', masterFilters.district);
+      if (masterFilters.block) params.append('block', masterFilters.block);
+      
+      const response = await fetch(`http://localhost:5002/api/area_mapping?${params.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        // If API returns count directly, use it; otherwise use array length
+        const count = data.count || data.total || (Array.isArray(data) ? data.length : 0);
+        setDataCount(Number(count) || 0);
+      } else {
+        setDataCount(0);
+      }
+    } catch (error) {
+      console.error('Error fetching data count:', error);
+      setDataCount(0);
     }
   };
 
@@ -166,6 +199,17 @@ export default function ImportExportPage() {
       )}
 
       <div className="p-6 max-w-7xl mx-auto">
+        {/* Import/Export Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <ImportData masterFilters={masterFilters} />
+          <ExportData 
+            masterFilters={masterFilters} 
+            detailedFilters={{}}
+            dataCount={dataCount}
+          />
+        </div>
+
+        {/* Activity Monitoring Section */}
         <div className="bg-white rounded-lg shadow-lg p-6">
           <h1 className="text-3xl font-bold text-gray-800 mb-6">User Activity Monitoring</h1>
           

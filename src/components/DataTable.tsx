@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import CommonPagination from './CommonPagination';
+  import FilterMessage from './FilterMessage';
 
 // Add CSS for copy blink effect
 const copyBlinkCSS = `
@@ -43,7 +44,7 @@ import {
   flexRender,
   ColumnDef,
 } from '@tanstack/react-table';
-import { ChevronDown, ChevronLeft, ChevronRight, Eye, CheckCircle } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Eye, CheckCircle, Image as ImageIcon } from 'lucide-react';
 
 // Define interfaces for type safety
 interface DivisionDataItem {
@@ -342,7 +343,7 @@ const columns: ColumnDef<Voter>[] = [
   // },
   {
     accessorKey: 'name',
-    header: 'Name   M/F  | Age',
+    header: 'Name | M/F | Age',
     size: 280,
   },
   {
@@ -763,6 +764,39 @@ function DataTable({
   // Column resizing state
   const [columnSizes, setColumnSizes] = useState<Record<string, number>>({});
   const colResizeRef = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
+
+  // Photo availability cache map: key is recordId (row_pk or division_id)
+  const [photoAvailability, setPhotoAvailability] = useState<Record<string, boolean>>({});
+
+  // Helper: resolve unique record id for photo lookup
+  const resolveRecordId = useCallback((row: Voter): string | null => {
+    const id = row.row_pk != null ? String(row.row_pk) : (row.division_id || '').trim();
+    return id && id.length > 0 ? id : null;
+  }, []);
+
+  // Check if photo exists for a given record id (HEAD request) and cache the result
+  const checkAndCachePhoto = useCallback(async (recordId: string) => {
+    if (!recordId || photoAvailability.hasOwnProperty(recordId)) return;
+    try {
+      // Predictable photo endpoint; adjust if backend differs
+      const url = `http://localhost:5002/api/photos/${encodeURIComponent(recordId)}.jpg`;
+      const res = await fetch(url, { method: 'HEAD' });
+      setPhotoAvailability(prev => ({ ...prev, [recordId]: res.ok }));
+    } catch {
+      setPhotoAvailability(prev => ({ ...prev, [recordId]: false }));
+    }
+  }, [photoAvailability]);
+
+  // When page data changes, probe photo existence for visible rows (debounced via microtask)
+  useEffect(() => {
+    const idsToCheck: string[] = [];
+    for (const row of memoizedData) {
+      const rid = resolveRecordId(row);
+      if (rid && !photoAvailability.hasOwnProperty(rid)) idsToCheck.push(rid);
+    }
+    if (idsToCheck.length === 0) return;
+    Promise.allSettled(idsToCheck.map(id => checkAndCachePhoto(id))).catch(() => {});
+  }, [memoizedData, resolveRecordId, checkAndCachePhoto, photoAvailability]);
   
   // Row resizing state
   const [rowHeights, setRowHeights] = useState<Record<number, number>>({});
@@ -970,8 +1004,11 @@ function DataTable({
 
   // Pagination handlers - handlePageChange function
   const handlePageChange = useCallback(async (page: number, isFilterChange: boolean = false) => {
+    console.log(`🔄 handlePageChange called: page=${page}, isFilterChange=${isFilterChange}, currentPage=${pagination.currentPage}, totalPages=${pagination.totalPages}`);
+    
     // Guard: do not fetch when no filters are active
     if (!hasActiveFilters()) {
+      console.log('❌ No active filters, clearing data');
       if (!isFilterChange) {
         setLoading(false);
       } else {
@@ -981,7 +1018,10 @@ function DataTable({
       setPagination(prev => ({ ...prev, currentPage: 1, totalItems: 0, totalPages: 0 }));
       return;
     }
-    if (page < 1 || page > pagination.totalPages) return;
+    if (page < 1 || page > pagination.totalPages) {
+      console.log(`❌ Invalid page: ${page}, totalPages: ${pagination.totalPages}`);
+      return;
+    }
     
     // Update pagination state
     setPagination(prev => ({ ...prev, currentPage: page }));
@@ -1120,9 +1160,10 @@ function DataTable({
           }
         } catch {}
         
+        console.log(`✅ Page ${page} data fetched successfully: ${mappedData.length} records`);
         setData(mappedData);
         
-        // Update pagination info
+        // Update pagination info - use better logic for pagination
         let totalCount: number | string = mappedData.length;
         let totalPages = 1;
         
@@ -2374,10 +2415,8 @@ function DataTable({
 
   // Pre-compute the table body to ensure all hooks are called consistently
   const tableBody = useMemo(() => {
-    // Apply client-side pagination to displayed data
-    const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
-    const endIndex = startIndex + pagination.itemsPerPage;
-    const displayData = memoizedData.slice(startIndex, endIndex);
+    // Use server-side pagination - show all data from current page
+    const displayData = memoizedData; // Don't slice - show all data from current API call
     const displayColumns = columns;
     const displayColumnIds = displayColumns.map(col => {
       if (col.id) return col.id;
@@ -2385,9 +2424,11 @@ function DataTable({
       return 'unknown';
     });
     
-    // Show exactly rows for current page
+    console.log(`📊 Table Body: Current page ${pagination.currentPage}, showing ${displayData.length} rows`);
+    
+    // Show all rows from current page data
     return displayData.map((rowData, index) => {
-      const absoluteRowIndex = startIndex + index;
+      const absoluteRowIndex = index; // Use index from current page data
       return (
         <tr key={`row-${absoluteRowIndex}`} style={{ height: '28px' }}>
           {displayColumnIds.map((columnId, cellIndex) => (
@@ -2452,19 +2493,46 @@ function DataTable({
                   displayValue={
                     columnId === 'name'
                       ? (
-                          <div className="flex items-center w-full">
-                            <div className="flex-1 min-w-0">
-                              <span className="truncate block">{rowData.name || ''}</span>
+                          <div className="grid grid-cols-3 gap-2 w-full items-center">
+                            <div className="min-w-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const famId = (rowData as any).family_id || (rowData as any).division_id || '';
+                                  if (famId && famId.trim() !== '') {
+                                    openFamilyModal(String(famId));
+                                  } else {
+                                    alert('Family ID not available for this person. Please contact administrator.');
+                                  }
+                                }}
+                                className={`truncate block text-left text-blue-600 hover:text-blue-800 hover:underline cursor-pointer font-medium transition-colors duration-200 flex items-center gap-1 px-1 py-0.5 rounded hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                  isFamilyModalOpen && familyModalFamilyId === ((rowData as any).family_id || (rowData as any).division_id || '') 
+                                    ? 'bg-blue-100 border border-blue-300' 
+                                    : ''
+                                }`}
+                                title={`Click to view family members for ${rowData.name || 'this person'}`}
+                                disabled={familyLoading}
+                                aria-label={`View family members for ${rowData.name || 'this person'}`}
+                                role="button"
+                              >
+                                <span className="text-xs">👨‍👩‍👧‍👦</span>
+                                {rowData.name || 'No Name'}
+                                {familyLoading && <span className="ml-1 text-xs">⏳</span>}
+                              </button>
                             </div>
-                            <div className="flex items-center space-x-1 mx-2 flex-shrink-0">
-                              <span className="text-gray-400">|</span>
-                              <span className="text-gray-700 font-medium">
-                                {rowData.gender ? (rowData.gender.toLowerCase() === 'male' ? 'M' : rowData.gender.toLowerCase() === 'female' ? 'F' : rowData.gender) : ''}
+                            <div className="flex items-center justify-center">
+                              <span className="text-gray-700 font-medium text-center min-w-[20px]">
+                                {rowData.gender ? (
+                                  rowData.gender.toLowerCase() === 'male' ? 'M' : 
+                                  rowData.gender.toLowerCase() === 'female' ? 'F' :
+                                  rowData.gender === 'पुरुष' ? 'M' :
+                                  rowData.gender === 'महिला' ? 'F' :
+                                  rowData.gender
+                                ) : ''}
                               </span>
                             </div>
-                            <div className="flex items-center space-x-1 flex-shrink-0">
-                              <span className="text-gray-400">|</span>
-                              <span className="text-gray-700 font-medium">{rowData.age || ''}</span>
+                            <div className="flex items-center justify-end">
+                              <span className="text-gray-700 font-medium text-right">{rowData.age || ''}</span>
                             </div>
                           </div>
                         )
@@ -2477,18 +2545,29 @@ function DataTable({
                                 ) : null}
                                 <span className="truncate">{rowData.verify || ''}</span>
                               </div>
-                              <span className="text-gray-300">|</span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const famId = (rowData as any).family_id || (rowData as any).division_id || '';
-                                  openFamilyModal(String(famId));
-                                }}
-                                className="p-1 rounded hover:bg-gray-100 cursor-pointer"
-                                title="View family members"
-                              >
-                                <Eye size={16} className="text-gray-700" />
-                              </button>
+                              {/* Photo indicator */}
+                              {(() => {
+                                const rid = resolveRecordId(rowData as Voter);
+                                const hasPhoto = rid ? photoAvailability[rid] : false;
+                                if (!rid) return null;
+                                return (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const url = `http://localhost:5002/api/photos/${encodeURIComponent(rid)}.jpg`;
+                                      window.open(url, '_blank');
+                                    }}
+                                    onMouseEnter={() => {
+                                      if (!photoAvailability.hasOwnProperty(rid)) checkAndCachePhoto(rid);
+                                    }}
+                                    className={`p-1 rounded hover:bg-gray-100 cursor-pointer ${hasPhoto ? '' : 'opacity-40 cursor-not-allowed'}`}
+                                    title={hasPhoto ? 'Open photo' : 'Photo not available'}
+                                    disabled={!hasPhoto}
+                                  >
+                                    <ImageIcon size={16} className={hasPhoto ? 'text-blue-600' : 'text-gray-400'} />
+                                  </button>
+                                );
+                              })()}
                             </div>
                           )
                       : undefined
@@ -2751,18 +2830,7 @@ function DataTable({
     const hasDetailedFilters = memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0 && Object.values(memoizedDetailedFilters).some(val => val && val !== '');
     
     if (!hasMasterFilters && !hasDetailedFilters) {
-      return (
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <div className="text-center">
-            <div className="text-gray-400 text-6xl mb-4">🔍</div>
-            <div className="text-gray-600 text-lg font-medium mb-2">No Filters Selected</div>
-            <div className="text-gray-500 mb-4">Please select filters from Master Filter or Filter Section to view data</div>
-            <div className="text-sm text-gray-400">
-              Select Parliament, Assembly, District, Block, or other detailed filters to get started
-            </div>
-          </div>
-        </div>
-      );
+      return <FilterMessage />;
     }
   }
 
@@ -2863,7 +2931,13 @@ function DataTable({
                         <td className="border px-2 py-1">{m.fname}</td>
                         <td className="border px-2 py-1">{m.mname}</td>
                         <td className="border px-2 py-1">
-                          {m.gender ? (m.gender.toLowerCase() === 'male' ? 'M' : m.gender.toLowerCase() === 'female' ? 'F' : m.gender) : ''}
+                          {m.gender ? (
+                            m.gender.toLowerCase() === 'male' ? 'M' : 
+                            m.gender.toLowerCase() === 'female' ? 'F' :
+                            m.gender === 'पुरुष' ? 'M' :
+                            m.gender === 'महिला' ? 'F' :
+                            m.gender
+                          ) : ''}
                         </td>
                         <td className="border px-2 py-1">{m.mobile1}</td>
                         <td className="border px-2 py-1">{m.village}</td>

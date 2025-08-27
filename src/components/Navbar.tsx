@@ -11,6 +11,7 @@ export default function Navbar() {
   const router = useRouter();
   const [dataProcessDropdown, setDataProcessDropdown] = useState(false);
   const [currentPath, setCurrentPath] = useState('/');
+  const [showLogoutIcon, setShowLogoutIcon] = useState(false);
   const { user, logout, loading } = useAuth();
   
   // Track current pathname for active menu indication
@@ -176,35 +177,38 @@ export default function Navbar() {
       if (dataProcessDropdown && !target.closest('[data-dropdown="data-process"]')) {
         setDataProcessDropdown(false);
       }
+      if (showLogoutIcon && !target.closest('[data-user-profile]')) {
+        setShowLogoutIcon(false);
+      }
     };
 
-    if (dataProcessDropdown) {
+    if (dataProcessDropdown || showLogoutIcon) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [dataProcessDropdown]);
+  }, [dataProcessDropdown, showLogoutIcon]);
 
   return (
     <div className="bg-white shadow-sm border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-6 py-4">
-        <div className="flex justify-between items-center">
-          {/* Logo Section */}
-          <div className="flex items-center space-x-3">
-            <img 
-              src="/logo.png" 
-              alt="THE BIG OWL Logo" 
-              className="w-10 h-10 object-contain flex-shrink-0" 
-            />
-            <div className="hidden sm:block">
-              <h1 className="text-lg font-semibold text-gray-800">THE BIG OWL</h1>
-            </div>
-          </div>
+             <div className="w-full px-4 py-4">
+         <div className="flex items-center justify-between">
+           {/* Logo Section - Left Aligned with minimal left margin */}
+           <div className="flex items-center space-x-3 flex-shrink-0">
+             <img 
+               src="/logo.png" 
+               alt="THE BIG OWL Logo" 
+               className="w-10 h-10 object-contain flex-shrink-0" 
+             />
+             <div className="hidden sm:block">
+               <h1 className="text-lg font-semibold text-gray-800">THE BIG OWL</h1>
+             </div>
+           </div>
 
-          {/* Navigation Menu */}
-          <div className="hidden lg:flex items-center space-x-2">
+           {/* Navigation Menu - Center with proper spacing */}
+           <div className="hidden lg:flex items-center space-x-3">
             <button 
               onClick={() => router.push('/dashboard')}
               className={getButtonClasses('/dashboard')}
@@ -280,7 +284,7 @@ export default function Navbar() {
               Maps
             </button>
             <button className="px-4 py-2.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-base cursor-pointer">
-              Cast By Surname
+              Setting
             </button>
             <button className="px-4 py-2.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-base cursor-pointer">
               Report
@@ -296,8 +300,8 @@ export default function Navbar() {
             </button>
           </div>
 
-          {/* User Profile (Right Side) */}
-          <div className="flex items-center space-x-3">
+                     {/* User Profile (Right Side) */}
+           <div className="flex items-center space-x-3 flex-shrink-0" data-user-profile>
             {loading ? null : user ? (
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
@@ -305,17 +309,25 @@ export default function Navbar() {
                     {(user.username || user.email).charAt(0).toUpperCase()}
                   </span>
                 </div>
-                <div className="hidden sm:flex flex-col">
-                  <span className="text-sm font-medium text-gray-900">{user.username || user.email}</span>
-                  <span className="text-xs text-gray-500 capitalize">{user.role}</span>
-                </div>
-                <button
-                  onClick={logout}
-                  className="hidden sm:inline-flex items-center px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded"
-                  title="Logout"
-                >
-                  <LogOut size={14} className="mr-1" /> Logout
-                </button>
+                                 <div className="hidden sm:flex flex-col">
+                   <span 
+                     className="text-sm font-medium text-gray-900 hover:text-blue-600 cursor-pointer transition-colors duration-200"
+                     onClick={() => setShowLogoutIcon(!showLogoutIcon)}
+                   >
+                     {user.username || user.email}
+                   </span>
+                   <span className="text-xs text-gray-500 capitalize">{user.role}</span>
+                 </div>
+                 {showLogoutIcon && (
+                   <button
+                     onClick={logout}
+                     className="inline-flex items-center p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-full transition-all duration-200"
+                     title="Logout"
+                   >
+                     {/* <LogOut size={16} /> */}
+                     <img src="/logout.png" alt="Logout" className="w-6 h-6 cursor-pointer" />
+                   </button>
+                 )}
               </div>
             ) : (
               <button

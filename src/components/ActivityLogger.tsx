@@ -1,5 +1,4 @@
-import { useContext } from 'react';
-import { AuthContext } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ActivityLoggerProps {
   action_type: 'download' | 'save' | 'filter' | 'import' | 'export' | 'process';
@@ -16,7 +15,7 @@ const ActivityLogger = ({
   data_count = 0, 
   file_name 
 }: ActivityLoggerProps) => {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
 
   const logActivity = async () => {
     if (!user) return;
@@ -59,7 +58,7 @@ export default ActivityLogger;
 
 // Hook for easy activity logging
 export const useActivityLogger = () => {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
 
   const logActivity = async (activityData: {
     action_type: 'download' | 'save' | 'filter' | 'import' | 'export' | 'process';
@@ -68,10 +67,14 @@ export const useActivityLogger = () => {
     data_count?: number;
     file_name?: string;
   }) => {
-    if (!user) return;
+    if (!user) {
+      console.log('No user logged in, skipping activity log');
+      return true; // Return true to not block the operation
+    }
 
     try {
-      const response = await fetch('/api/log', {
+      // Try to log to backend, but don't fail if backend is not available
+      const response = await fetch('http://localhost:5002/api/log', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -89,12 +92,12 @@ export const useActivityLogger = () => {
         console.log('Activity logged successfully');
         return true;
       } else {
-        console.error('Failed to log activity');
-        return false;
+        console.warn('Failed to log activity to backend, but continuing operation');
+        return true; // Return true to not block the operation
       }
     } catch (error) {
-      console.error('Error logging activity:', error);
-      return false;
+      console.warn('Backend not available for activity logging, but continuing operation:', error);
+      return true; // Return true to not block the operation
     }
   };
 

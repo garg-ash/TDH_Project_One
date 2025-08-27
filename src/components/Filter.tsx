@@ -517,7 +517,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 value={castTypeFilter}
                 onChange={setcastTypeFilter}
                 options={filterOptions.castTypes}
-                placeholder="Cast Type"
+                placeholder="जाति"
                 label=""
                 disabled={loading}
                 activeDropdown={activeDropdown}
@@ -527,7 +527,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Enter mobile 1"
+                  placeholder="मोबाइल नं. 1"
                   value={mobile1Filter}
                   onChange={(e) => setmobile1Filter(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
@@ -538,7 +538,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Enter mobile 2"
+                  placeholder="मोबाइल नं. 2"
                   value={mobile2Filter}
                   onChange={(e) => setmobile2Filter(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
@@ -550,7 +550,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 <div className="flex space-x-2">
                   <input
                     type="number"
-                    placeholder="From"
+                    placeholder="कहां से"
                     value={ageFromFilter}
                     onChange={(e) => setageFromFilter(e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
@@ -561,7 +561,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                   <span className="flex items-center text-gray-500 text-sm">to</span>
                   <input
                     type="number"
-                    placeholder="To"
+                    placeholder="कहां तक"
                     value={ageToFilter}
                     onChange={(e) => setageToFilter(e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
@@ -573,8 +573,8 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
               </div>
             </div>
 
-            {/* Buttons on Right Side */}
-            <div className="flex items-center space-x-3 flex-shrink-0">
+            {/* Buttons on Right Side (tight spacing like MasterFilter) */}
+            <div className="flex items-center space-x-2 flex-shrink-0">
               
 
               {/* Show More/Less Button */}
@@ -654,6 +654,7 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                   placeholder="Select date"
                   value={dobFilter}
                   onChange={handleDobChange}
+                  max={new Date().toISOString().split('T')[0]}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
                   disabled={loading}
                 />

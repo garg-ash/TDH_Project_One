@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ArrowRight, MapPin, Search, RefreshCw } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 import MasterFilter from '../../components/MasterFilter';
 import CommonPagination from '../../components/CommonPagination';
-import { apiService, VillageMappingData } from '../../services/api';
+import { apiService, VillageMappingData, DivisionData } from '../../services/api';
+import ExcelDataTable from '../../components/ExcelDataTable';
 
 export default function VillageMappingPage() {
   const [loading, setLoading] = useState(false);
@@ -23,6 +24,9 @@ export default function VillageMappingPage() {
     district?: string;
     block?: string;
   }>({});
+
+  // Division/District reference data for mapping District name -> DISTRICT_CODE
+  const [divisionData, setDivisionData] = useState<DivisionData[]>([]);
 
   // Checkbox states for village mapping form fields
   const [villageNameChecked, setVillageNameChecked] = useState(false);
@@ -102,6 +106,18 @@ export default function VillageMappingPage() {
       setLoading(false);
     }
   };
+
+  // Fetch reference division/district data once
+  useEffect(() => {
+    (async () => {
+      try {
+        const refData = await apiService.getDivisionData();
+        setDivisionData(refData || []);
+      } catch (e) {
+        console.warn('Failed to load division reference data');
+      }
+    })();
+  }, []);
 
   // Effect to refetch data when master filters change
   useEffect(() => {
@@ -214,6 +230,59 @@ export default function VillageMappingPage() {
     
     fetchVillageMappingData(filters, 1);
   };
+
+  // Decide which columns to show based on selected checkboxes
+  const allColumns = [
+    { key: 'district', label: 'District no' },
+    { key: 'block', label: 'Block' },
+    { key: 'gp', label: 'GP' },
+    { key: 'assembly', label: 'AC' },
+    { key: 'parliament', label: 'PC' },
+    { key: 'villageName', label: 'Village' },
+  ] as const;
+
+  const showAllColumns = villageNameChecked; // If village selected, show all
+  const columnsToShow = showAllColumns ? allColumns : allColumns.slice(0, 4); // If GP selected, show first 4
+
+  const getCellValue = (colKey: typeof allColumns[number]['key'], row: VillageMappingData) => {
+    switch (colKey) {
+      case 'district':
+        {
+          // Try to map district name to DISTRICT_CODE from reference table
+          const targetName = (row.district || '').toString().trim().toLowerCase();
+          const match = divisionData.find(d => (d.DISTRICT_ENG || '').toString().trim().toLowerCase() === targetName);
+          return match ? String(match.DISTRICT_ID) : row.district;
+        }
+      case 'block':
+        return row.block;
+      case 'gp':
+        return row.gp;
+      case 'assembly':
+        return row.assembly;
+      case 'parliament':
+        return row.parliament;
+      case 'villageName':
+        return row.villageName;
+      default:
+        return '';
+    }
+  };
+
+  // ExcelDataTable column definitions (with row header)
+  const excelColumns = [
+    { id: 'select', header: '#', size: 60, isRowHeader: true },
+    ...columnsToShow.map(col => ({ id: col.key, accessorKey: col.key, header: col.label, size: 160 }))
+  ];
+
+  // Transform data for display: replace district name with its DISTRICT_ID (if found)
+  const displayVillageData = useMemo(() => {
+    if (!Array.isArray(villageData) || villageData.length === 0) return villageData as any;
+    return villageData.map(row => {
+      const targetName = (row.district || '').toString().trim().toLowerCase();
+      const match = divisionData.find(d => (d.DISTRICT_ENG || '').toString().trim().toLowerCase() === targetName);
+      return match ? { ...row, district: String(match.DISTRICT_ID) } : row;
+    });
+  }, [villageData, divisionData]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -446,57 +515,50 @@ export default function VillageMappingPage() {
                 </div>
               )}
               
-              {/* Data Table */}
+              {/* Data Table (Excel-like) */}
               {!loading && (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Village Name
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          GP
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total Voters
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Last Updated
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {villageData.length > 0 ? (
-                        villageData.map((village) => (
-                          <tr key={village.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {village.villageName}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {village.gp}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {village.totalVoters.toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {village.lastUpdated}
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                            <div className="flex flex-col items-center">
-                              <MapPin className="w-8 h-8 text-gray-300 mb-2" />
-                              <p>No village mapping data found</p>
-                              <p className="text-sm">Try adjusting your filters</p>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                  {displayVillageData.length > 0 ? (
+                    <ExcelDataTable
+                      data={displayVillageData as unknown as Record<string, any>[]}
+                      columns={excelColumns as any}
+                      loading={loading}
+                      onUpdateRow={async (rowIndex, columnId, value) => {
+                        // Ignore row header updates
+                        if (columnId === 'select') return;
+                        const row = displayVillageData[rowIndex];
+                        if (!row) return;
+                        const update: Partial<VillageMappingData> = {} as any;
+                        // Only allow updates for known keys
+                        if (['district','block','gp','assembly','parliament','villageName'].includes(columnId)) {
+                          (update as any)[columnId] = value;
+                          await handleUpdateVillageMapping(row.id, update);
+                        }
+                      }}
+                      showPagination={pagination.totalPages > 1}
+                      pagination={pagination}
+                      onPageChange={handlePageChange}
+                      onItemsPerPageChange={handleItemsPerPageChange}
+                      showRefreshButton={true}
+                      onRefresh={() => fetchVillageMappingData({
+                        villageName: formData.villageName,
+                        district: masterFilters.district,
+                        block: masterFilters.block,
+                        gp: formData.gp,
+                        assembly: masterFilters.assembly,
+                        parliament: masterFilters.parliament
+                      }, pagination.currentPage)}
+                      tableHeight="h-[70vh]"
+                    />
+                  ) : (
+                    <div className="px-6 py-8 text-center text-gray-500">
+                      <div className="flex flex-col items-center">
+                        <MapPin className="w-8 h-8 text-gray-300 mb-2" />
+                        <p>No village mapping data found</p>
+                        <p className="text-sm">Try adjusting your filters</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               

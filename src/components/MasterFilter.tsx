@@ -256,16 +256,19 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
       if (showExportDropdown && !target.closest('[data-export-dropdown]')) {
         setShowExportDropdown(false);
       }
+      if (showPresetsDropdown && !target.closest('[data-presets-dropdown]')) {
+        setShowPresetsDropdown(false);
+      }
     };
 
-    if (showExportDropdown) {
+    if (showExportDropdown || showPresetsDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showExportDropdown]);
+  }, [showExportDropdown, showPresetsDropdown]);
 
   // Fetch master filter options from backend with cascading filters (debounced)
   useEffect(() => {
@@ -337,25 +340,9 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
   }, [parliament, assembly, district, block]); // Refetch when any filter changes
 
   // Function to clear dependent filters when higher-level filter changes
+  // This function is no longer used - we now allow users to keep their filter selections
   const clearDependentFilters = (changedFilter: 'parliament' | 'assembly' | 'district' | 'block') => {
-    switch (changedFilter) {
-      case 'parliament':
-        // If parliament changes, clear assembly, district, and block
-        setAssembly('');
-        setDistrict('');
-        setBlock('');
-        break;
-      case 'assembly':
-        // If assembly changes, clear district and block
-        setDistrict('');
-        setBlock('');
-        break;
-      case 'district':
-        // If district changes, clear block
-        setBlock('');
-        break;
-      // block doesn't clear any other filters
-    }
+    // No automatic clearing - users can manually manage their filter selections
   };
 
   // Function to apply filters when Go button is clicked (for immediate feedback)
@@ -426,7 +413,15 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
 
   // Show save notification (renamed to avoid collision with state variable)
   const triggerSaveNotification = (message: string, type: 'success' | 'error' = 'success') => {
-    setSaveNotificationMessage(message);
+    if (type === 'success') {
+      if (message === 'filters_loaded') {
+        setSaveNotificationMessage('Filters Loaded');
+      } else {
+        setSaveNotificationMessage('Data Saved');
+      }
+    } else {
+      setSaveNotificationMessage('Check connection');
+    }
     setSaveNotificationType(type);
     setShowSaveNotification(true);
     
@@ -485,7 +480,7 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
         setSavedPresets(updatedPresets);
         localStorage.setItem('filterPresets', JSON.stringify(updatedPresets));
         
-        triggerSaveNotification(`✅ Filters saved successfully! Name: ${filterName}`, 'success');
+        triggerSaveNotification('', 'success');
       } else {
         throw new Error('Failed to save to backend');
       }
@@ -509,7 +504,7 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
       setSavedPresets(updatedPresets);
       localStorage.setItem('filterPresets', JSON.stringify(updatedPresets));
       
-      triggerSaveNotification('✅ Filters saved to local storage!', 'success');
+              triggerSaveNotification('', 'success');
     }
   };
 
@@ -592,7 +587,7 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
   return (
     <div className="w-full space-y-4">
       {/* Single Row with Two Containers */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between w-full">
         {/* Left Container: Filter Fields + Go + Refresh */}
         <div className="flex items-center space-x-6">
           {/* Filter Fields Grid - Increased Width */}
@@ -605,8 +600,9 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
                 // Resolve label to ID
                 const match = label.match(/\((\d+)\)\s*$/);
                 const matchedId = match ? match[1] : (Object.keys(pcIdToHindi).find(id => pcIdToHindi[id] === label) || '');
+                
+                // Set parliament value without clearing dependent filters
                 setParliament(matchedId);
-                clearDependentFilters('parliament');
               }}
               options={parliamentOptions}
               placeholder="संसदीय क्षेत्र"
@@ -624,7 +620,6 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
                 const match = label.match(/\((\d+)\)\s*$/);
                 const matchedId = match ? match[1] : (Object.keys(acIdToHindi).find(id => acIdToHindi[id] === label) || '');
                 setAssembly(matchedId);
-                clearDependentFilters('assembly');
               }}
               options={assemblyOptions}
               placeholder="विधानसभा क्षेत्र"
@@ -639,7 +634,6 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
               value={district}
               onChange={(value) => {
                 setDistrict(value);
-                clearDependentFilters('district');
               }}
               options={districtOptions}
               placeholder="ज़िला"
@@ -654,7 +648,6 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
               value={block}
               onChange={(value) => {
                 setBlock(value);
-                clearDependentFilters('block');
               }}
               options={blockOptions}
               placeholder="ब्लॉक"
@@ -665,12 +658,12 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
             />
           </div>
 
-          {/* Go Button and Refresh Button together */}
-          <div className="flex items-center space-x-3">
+          {/* Go Button and Refresh Button together (tight spacing) */}
+          <div className="flex items-center ">
             {/* Go Button */}
             <button
               onClick={handleApplyFilters}
-              className="flex items-center justify-center space-x-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm cursor-pointer min-w-[80px] h-[40px]"
+              className="flex items-center justify-center space-x-2 px-2 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 font-medium text-sm cursor-pointer min-w-[80px] h-[40px]"
             >
               <Play size={16} />
               <span>Go</span>
@@ -685,7 +678,7 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
                 window.dispatchEvent(new CustomEvent('refreshDataTable'));
               }}
               disabled={isLocked}
-              className="flex items-center justify-center p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed min-w-[40px] h-[40px]"
+              className="flex items-center justify-center text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed min-w-[40px] h-[40px]"
               title="Refresh data and clear all filters"
             >
               <RefreshCw size={16} />
@@ -693,21 +686,110 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
           </div>
         </div>
 
-        {/* Right Container: Save + Export + Lock */}
-        <div className="flex items-center space-x-3">
-          {/* Save Button */}
-          <button
-            onClick={handleSaveFilters}
-            className={`px-3 py-2 rounded-lg transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px] h-[40px] ${
-              hasActiveFilters 
-                ? 'bg-gray-600 text-white hover:bg-gray-700' 
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
-            disabled={!hasActiveFilters}
-          >
-            <Save size={16} />
-            <span>Save</span>
-          </button>
+        {/* Right Container: Save + Export + Lock (fixed to right) */}
+        <div className="flex items-center space-x-3 ml-40">
+          {/* Smart Save Button - Shows saved filters on hover/long press */}
+          <div className="relative" data-presets-dropdown>
+            <button
+              onClick={handleSaveFilters}
+              onMouseEnter={() => {
+                // Show saved filters on hover after 1 second
+                setTimeout(() => {
+                  if (savedPresets.length > 0) {
+                    setShowPresetsDropdown(true);
+                  }
+                }, 1000);
+              }}
+              className={`px-3 py-2 rounded-lg transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px] h-[40px] ${
+                hasActiveFilters 
+                  ? 'bg-gray-600 text-white hover:bg-gray-700' 
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+              disabled={!hasActiveFilters}
+            >
+              <Save size={16} />
+              <span>Save</span>
+              {savedPresets.length > 0 && (
+                <div className="relative">
+                  <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                    {savedPresets.length}
+                  </div>
+                  <ChevronDown size={14} className={`transition-transform ${showPresetsDropdown ? 'rotate-180' : ''}`} />
+                </div>
+              )}
+            </button>
+            
+            {/* Saved Filters Dropdown - Shows on hover */}
+            {showPresetsDropdown && savedPresets.length > 0 && (
+              <div 
+                className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[300px] max-h-80 overflow-y-auto"
+                onMouseEnter={() => {
+                  // Keep dropdown open when hovering over it
+                  setShowPresetsDropdown(true);
+                }}
+                onMouseLeave={() => {
+                  // Hide dropdown with delay when leaving
+                  setTimeout(() => {
+                    setShowPresetsDropdown(false);
+                  }, 1000); // Increased delay to 1 second
+                }}
+              >
+                <div className="p-3 border-b border-gray-100">
+                  <div className="text-sm font-medium text-gray-700">Saved Filter Presets ({savedPresets.length})</div>
+                </div>
+                <div className="p-2">
+                  {savedPresets.map((preset) => (
+                    <div key={preset.id} className="p-3 border border-gray-200 rounded-lg mb-2 hover:bg-gray-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm font-medium text-gray-800">{preset.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(preset.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-600 mb-2">
+                        <div>Parliament: {preset.filters.parliament || 'Not set'}</div>
+                        <div>Assembly: {preset.filters.assembly || 'Not set'}</div>
+                        <div>District: {preset.filters.district || 'Not set'}</div>
+                        <div>Block: {preset.filters.block || 'Not set'}</div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => {
+                            // Load the saved filters
+                            setParliament(preset.filters.parliament);
+                            setAssembly(preset.filters.assembly);
+                            setDistrict(preset.filters.district);
+                            setBlock(preset.filters.block);
+                            setShowPresetsDropdown(false);
+                            // Show success message
+                            triggerSaveNotification('filters_loaded', 'success');
+                          }}
+                          className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                        >
+                          Load
+                        </button>
+                        <button
+                          onClick={() => {
+                            // Delete the preset
+                            const updatedPresets = savedPresets.filter(p => p.id !== preset.id);
+                            setSavedPresets(updatedPresets);
+                            localStorage.setItem('filterPresets', JSON.stringify(updatedPresets));
+                            // Show success message
+                            triggerSaveNotification('', 'success');
+                          }}
+                          className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Export Button */}
 
           {/* Export Button */}
           <div className="relative">
@@ -790,32 +872,32 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
          </div>
        )}
 
-       {/* Save Notification Popup - Right Side */}
+       {/* Save Notification Popup - Right Side with Animation */}
        {showSaveNotification && (
-         <div className="fixed top-4 right-4 z-50 max-w-sm">
-           <div className={`rounded-lg shadow-lg p-4 border-l-4 ${
+         <div className="fixed top-4 right-4 z-50 max-w-sm animate-slideIn">
+           <div className={`rounded-lg shadow-xl p-4 border-l-4 transform transition-all duration-300 ${
              saveNotificationType === 'success' 
-               ? 'bg-green-50 border-green-400 text-green-800' 
-               : 'bg-red-50 border-red-400 text-red-800'
+               ? 'bg-green-500 border-green-600 text-white shadow-green-200' 
+               : 'bg-red-500 border-red-600 text-white shadow-red-200'
            }`}>
-             <div className="flex items-start space-x-3">
-               <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
-                 saveNotificationType === 'success' ? 'bg-green-400' : 'bg-red-400'
+             <div className="flex items-center space-x-3">
+               <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
+                 saveNotificationType === 'success' ? 'bg-green-600' : 'bg-red-600'
                }`}>
                  {saveNotificationType === 'success' ? (
-                   <span className="text-white text-xs">✓</span>
+                   <span className="text-white text-sm font-bold">✓</span>
                  ) : (
-                   <span className="text-white text-xs">⚠</span>
+                   <span className="text-white text-sm font-bold">!</span>
                  )}
                </div>
                <div className="flex-1">
-                 <p className="text-sm font-medium">{saveNotificationMessage}</p>
+                 <p className="text-sm font-semibold">{saveNotificationMessage}</p>
                </div>
                <button
                  onClick={() => setShowSaveNotification(false)}
-                 className="flex-shrink-0 text-gray-400 hover:text-gray-600"
+                 className="flex-shrink-0 text-white hover:text-gray-200 transition-colors duration-200"
                >
-                 <span className="text-lg">×</span>
+                 <span className="text-lg font-bold">×</span>
                </button>
              </div>
            </div>

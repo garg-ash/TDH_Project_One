@@ -91,17 +91,59 @@ function HomePage() {
   if (showModules) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <Navbar />
+        {/* Custom Header */}
+        <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            {/* Left: Username */}
+            <div className="flex items-center">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                <span className="text-blue-600 font-semibold text-lg">
+                  {userInfo?.name?.charAt(0) || userInfo?.email?.charAt(0) || 'U'}
+                </span>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Welcome back</p>
+                <p className="font-semibold text-gray-800">{userInfo?.name || userInfo?.email}</p>
+              </div>
+            </div>
+
+            {/* Center: Logo */}
+             <div className="flex items-center space-x-3">
+            <img 
+              src="/logo.png" 
+              alt="THE BIG OWL Logo" 
+              className="w-10 h-10 object-contain flex-shrink-0" 
+            />
+            <div className="hidden sm:block">
+              <h1 className="text-lg font-semibold text-gray-800">THE BIG OWL</h1>
+            </div>
+          </div>
+
+                                                   {/* Right: Power Button */}
+                             <button
+                 onClick={() => {
+                   localStorage.removeItem('authToken');
+                   localStorage.removeItem('userInfo');
+                   window.location.href = '/login';
+                 }}
+                 className="p-3 bg-gray-100 rounded-lg transition-all duration-200 flex items-center justify-center cursor-pointer hover:scale-110"
+                 title="Logout"
+               >
+                 <img src="/logout.png" alt="logout" className="w-6 h-6 cursor-pointer" />
+              </button>
+          </div>
+        </div>
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center py-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
               <Settings size={32} className="text-gray-600" />
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-2">
-              Election Management System
+            अपना मॉड्यूल चुनें
             </h1>
             <p className="text-gray-600 text-lg">
-              Welcome back, {userInfo?.name || userInfo?.email}! Select a module to get started
+            अपना काम शुरू करने के लिए एक मॉड्यूल चुनें
             </p>
           </div>
 

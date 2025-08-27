@@ -14,6 +14,7 @@ import ProcessedDataTable from './ProcessedDataTable';
 export interface SurnameData {
   id: number;
   name?: string; // Name field to extract surname from (optional)
+  religion?: string;
   surname: string;
   count: number;
   castId: string;
@@ -210,6 +211,18 @@ const columns: ColumnDef<SurnameData>[] = [
     maxSize: 50,
   },
   {
+    id: 'rowCheck',
+    header: '',
+    size: 40,
+    minSize: 40,
+    maxSize: 40,
+  },
+  {
+    accessorKey: 'religion',
+    header: 'Religion',
+    size: 140,
+  },
+  {
     accessorKey: 'castId',
     header: 'Cast',
     size: 150,
@@ -279,6 +292,7 @@ export default function SurnameDataTable({
   const [editValue, setEditValue] = useState('');
   const [focusedCell, setFocusedCell] = useState<{row: number, column: string} | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
   
   // Add state for processed data view
   const [showProcessedData, setShowProcessedData] = useState(false);
@@ -523,7 +537,10 @@ export default function SurnameDataTable({
     
     setProcessingData(true);
     try {
-      await onProcessData(data);
+      const rowsToProcess = (selectedRowIds.size > 0)
+        ? data.filter(item => selectedRowIds.has(item.id))
+        : data;
+      await onProcessData(rowsToProcess);
       setShowProcessedData(true);
     } catch (error) {
       console.error('Error processing data:', error);
@@ -604,21 +621,27 @@ export default function SurnameDataTable({
 
   // Pre-compute the table body
   const tableBody = useMemo(() => {
-    // Use pagination itemsPerPage instead of hardcoded 100
-    const maxVisibleRows = pagination?.itemsPerPage || 100;
-    const totalRows = loading ? maxVisibleRows : Math.min(maxVisibleRows, data?.length || 0);
+    // Show all data returned by the API (like DataTable does)
+    // This ensures we display exactly what the backend sends, not artificially limit it
+    const displayData = data || [];
+    const totalRows = loading ? (pagination?.itemsPerPage || 100) : displayData.length;
     
     console.log(`📊 Table Body Debug:`, {
       itemsPerPage: pagination?.itemsPerPage,
-      maxVisibleRows,
-      dataLength: data?.length,
+      requestedRows: pagination?.itemsPerPage || 100,
+      dataLength: displayData.length,
       totalRows,
       paginationState: pagination
     });
     
+    // Log if we're getting fewer rows than requested
+    if (!loading && pagination?.itemsPerPage && displayData.length < pagination.itemsPerPage) {
+      console.log(`⚠️ Warning: Requested ${pagination.itemsPerPage} rows but got ${displayData.length} rows from API`);
+    }
+    
     return Array.from({ length: totalRows }).map((_, index) => {
-      const isDataRow = !loading && data && index < data.length;
-      const rowData = isDataRow ? data[index] : null;
+      const isDataRow = !loading && displayData && index < displayData.length;
+      const rowData = isDataRow ? displayData[index] : null;
       
       return (
         <tr key={isDataRow ? (rowData?.id || index) : `empty-${index}`} style={{ height: '28px' }}>
@@ -635,31 +658,56 @@ export default function SurnameDataTable({
               {loading ? (
                 <div className={`h-6 animate-pulse ${cellIndex === 0 ? 'bg-gray-100' : 'bg-gray-50'}`}></div>
               ) : (
-                <SurnameExcelCell
-                  value={
-                    columnId === 'select' 
-                      ? index + 1 
-                      : columnId === 'surname' && isDataRow && rowData
-                        ? extractSurname(rowData.name || '') // Extract surname from name field
-                        : isDataRow && rowData 
-                          ? (rowData[columnId as keyof SurnameData] || '') 
-                          : ''
-                  }
-                  rowIndex={index}
-                  columnId={columnId}
-                  isSelected={selectedCell?.row === index && selectedCell?.column === columnId}
-                  isFocused={focusedCell?.row === index && focusedCell?.column === columnId}
-                  isEditing={editingCell?.row === index && editingCell?.column === columnId}
-                  onCellClick={handleCellClick}
-                  onCellDoubleClick={handleCellDoubleClick}
-                  onCellKeyDown={handleCellKeyDown}
-                  onUpdate={handleUpdateData}
-                  onUpdateAndNavigate={handleUpdateAndNavigate}
-                  editValue={editValue}
-                  setEditValue={setEditValue}
-                  onStopEditing={handleStopEditing}
-                  loading={loading}
-                />
+                columnId === 'rowCheck' ? (
+                  isDataRow && rowData ? (
+                    <div 
+                      className="h-full w-full flex items-center justify-center pointer-events-auto"
+                      onMouseDown={(e) => { e.stopPropagation(); }}
+                      onClick={(e) => { e.stopPropagation(); }}
+                    >
+                      <input
+                        type="checkbox"
+                        className="cursor-pointer"
+                        checked={selectedRowIds.has(rowData.id)}
+                        onChange={(e) => {
+                          setSelectedRowIds(prev => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(rowData.id); else next.delete(rowData.id);
+                            return next;
+                          });
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  ) : null
+                ) : (
+                  <SurnameExcelCell
+                    value={
+                      columnId === 'select' 
+                        ? index + 1 
+                        : columnId === 'surname' && isDataRow && rowData
+                          ? extractSurname(rowData.name || '')
+                          : isDataRow && rowData 
+                            ? (rowData[columnId as keyof SurnameData] || '') 
+                            : ''
+                    }
+                    rowIndex={index}
+                    columnId={columnId}
+                    isSelected={selectedCell?.row === index && selectedCell?.column === columnId}
+                    isFocused={focusedCell?.row === index && focusedCell?.column === columnId}
+                    isEditing={editingCell?.row === index && editingCell?.column === columnId}
+                    onCellClick={handleCellClick}
+                    onCellDoubleClick={handleCellDoubleClick}
+                    onCellKeyDown={handleCellKeyDown}
+                    onUpdate={handleUpdateData}
+                    onUpdateAndNavigate={handleUpdateAndNavigate}
+                    editValue={editValue}
+                    setEditValue={setEditValue}
+                    onStopEditing={handleStopEditing}
+                    loading={loading}
+                  />
+                )
               )}
             </td>
           ))}
@@ -728,7 +776,7 @@ export default function SurnameDataTable({
             <button
               onClick={handleProcessData}
               disabled={processingData || !onProcessData}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium cursor-pointer"
             >
               {processingData ? (
                 <span className="flex items-center">
@@ -736,7 +784,7 @@ export default function SurnameDataTable({
                   Processing...
                 </span>
               ) : (
-                'Process Data'
+                'View Table'
               )}
             </button>
           </div>
@@ -794,6 +842,9 @@ export default function SurnameDataTable({
                 <span>Showing {data?.length || 0} surname entries</span>
                 {typeof pagination.totalItems === 'string' && (
                   <span> (Total: {pagination.totalItems})</span>
+                )}
+                {pagination?.itemsPerPage && data && data.length < pagination.itemsPerPage && (
+                  <span className="text-orange-600 ml-2">⚠️ Expected {pagination.itemsPerPage} rows</span>
                 )}
               </div>
             </div>
