@@ -2,49 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import CommonPagination from './CommonPagination';
-  import FilterMessage from './FilterMessage';
-
-// Add CSS for copy blink effect
-const copyBlinkCSS = `
-  .copy-blink-effect {
-    animation: copyBlink 0.3s ease-in-out;
-    background-color: #dbeafe !important;
-    border: 2px solid #3b82f6 !important;
-    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
-    z-index: 1000 !important;
-  }
-  
-  @keyframes copyBlink {
-    0% { 
-      opacity: 1; 
-      transform: scale(1); 
-      background-color: #dbeafe !important;
-      border: 2px solid #3b82f6 !important;
-    }
-    50% { 
-      opacity: 0.7; 
-      transform: scale(1.02); 
-      background-color: #93c5fd !important;
-      border: 2px solid #1d4ed8 !important;
-    }
-    100% { 
-      opacity: 1; 
-      transform: scale(1); 
-      background-color: #dbeafe !important;
-      border: 2px solid #3b82f6 !important;
-    }
-  }
-`;
-
-// CSS injection moved into component useEffect to avoid SSR hydration mismatches
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  flexRender,
-  ColumnDef,
-} from '@tanstack/react-table';
-import { ChevronDown, ChevronLeft, ChevronRight, Eye, CheckCircle, Image as ImageIcon } from 'lucide-react';
+import FilterMessage from './FilterMessage';
+import ExcelDataTable from './ExcelDataTable';
 
 // Define interfaces for type safety
 interface DivisionDataItem {
@@ -93,254 +52,20 @@ interface Voter {
   cast_ida: string;
 }
 
-// Excel-like Cell Component
-interface ExcelCellProps {
-  value: any;
-  rowIndex: number;
-  columnId: string;
-  isSelected: boolean;
-  isFocused: boolean;
-  isEditing: boolean;
-  isInSelectionRange: boolean;
-  onCellClick: (rowIndex: number, columnId: string, event: React.MouseEvent) => void;
-  onCellDoubleClick: (rowIndex: number, columnId: string) => void;
-  onCellKeyDown: (e: React.KeyboardEvent, rowIndex: number, columnId: string) => void;
-  onUpdate: (rowIndex: number, columnId: string, value: any) => Promise<void>;
-  onUpdateAndNavigate: (rowIndex: number, columnId: string, value: any, navigationKey: string) => Promise<void>;
-  editValue: string;
-  setEditValue: (value: string) => void;
-  onStopEditing: () => void;
-  loading?: boolean;
-  isCopyBlinking?: boolean;
-  displayValue?: React.ReactNode;
-}
+// ExcelDataTable will handle all Excel functionality
 
-const ExcelCell = memo(function ExcelCell({ 
-  value, 
-  rowIndex, 
-  columnId, 
-  isSelected, 
-  isFocused, 
-  isEditing, 
-  isInSelectionRange,
-  onCellClick, 
-  onCellDoubleClick, 
-  onCellKeyDown,
-  onUpdate,
-  onUpdateAndNavigate,
-  editValue,
-  setEditValue,
-  onStopEditing,
-  loading = false,
-  isCopyBlinking = false,
-  displayValue
-}: ExcelCellProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      // Don't select all text - just position cursor at end for character-by-character editing
-      setTimeout(() => {
-        if (inputRef.current) {
-          const length = inputRef.current.value.length;
-          inputRef.current.setSelectionRange(length, length);
-        }
-      }, 0);
-    }
-  }, [isEditing]);
-
-  const handleKeyDown = async (e: React.KeyboardEvent) => {
-    if (isEditing) {
-      if (e.key === 'Enter') {
-        try {
-          await onUpdateAndNavigate(rowIndex, columnId, editValue, 'ArrowDown');
-          onStopEditing();
-        } catch (error) {
-          console.error('Error saving on Enter:', error);
-        }
-        e.preventDefault();
-        e.stopPropagation();
-      } else if (e.key === 'Escape') {
-        console.log(`ExcelCell: Canceling edit on Escape`);
-        onStopEditing();
-        e.preventDefault();
-        e.stopPropagation();
-      } else if (e.key === 'Tab') {
-        onUpdateAndNavigate(rowIndex, columnId, editValue, e.shiftKey ? 'ArrowLeft' : 'ArrowRight');
-        onStopEditing();
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    } else {
-      // Only handle navigation keys in non-editing mode, let the parent handle others
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'F2', 'Delete', 'Backspace'].includes(e.key)) {
-        onCellKeyDown(e, rowIndex, columnId);
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    }
-  };
-
-  const handleBlur = async () => {
-    if (isEditing) {
-      try {
-        await onUpdate(rowIndex, columnId, editValue);
-        onStopEditing();
-      } catch (error) {
-        console.error('Error saving on blur:', error);
-        // Keep editing mode on error so user can fix
-      }
-    }
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
-    // Direct editing: Click to edit immediately (like Excel)
-    if (columnId !== 'select') {
-      const currentValue = (value || '').toString();
-      setEditValue(currentValue);
-      onCellClick(rowIndex, columnId, e);
-      // Start editing immediately
-      onCellDoubleClick(rowIndex, columnId);
-    } else {
-      onCellClick(rowIndex, columnId, e);
-    }
-  };
-
-  // Row header (Sr. No.) styling
-  if (columnId === 'select') {
-    const rowHeaderStyle = isSelected ? {
-      border: '2px solid #000000',
-      zIndex: 1,
-      position: 'relative' as const
-    } : {};
-    
-    return (
-      <div 
-        className={`
-          h-full w-full flex items-center justify-center font-medium text-gray-800 text-sm
-          bg-gray-100 border-r border-gray-300 border-b border-gray-300
-          select-none cursor-pointer outline-none
-          hover:bg-gray-200
-        `}
-        style={rowHeaderStyle}
-        onClick={handleClick}
-        tabIndex={0}
-        onKeyDown={handleKeyDown}
-        data-cell={`${rowIndex}-${columnId}`}
-      >
-        {rowIndex + 1}
-      </div>
-    );
-  }
-
-  const cellClasses = `
-    h-full w-full flex items-center px-2 text-sm text-gray-900
-    border-r border-gray-300 border-b border-gray-300
-    cursor-cell select-none outline-none
-    ${isEditing ? 'bg-white' : ''}
-    ${!isEditing && !isSelected && !isFocused ? 'hover:bg-gray-50' : ''}
-    ${loading ? 'opacity-50 cursor-not-allowed' : ''}
-    ${isCopyBlinking && (isSelected || isInSelectionRange) ? 'copy-blink-effect' : ''}
-  `;
-  
-
-
-  // Excel-like selection styling with different colors for different selection states
-  let selectionStyle = {};
-  if (isSelected && !isEditing) {
-    selectionStyle = {
-      border: '2px solid #000000',
-      zIndex: 1,
-      position: 'relative' as const
-    };
-  } else if (isInSelectionRange && !isEditing) {
-    selectionStyle = {
-      backgroundColor: '#e3f2fd',
-      border: '1px solid #2196f3',
-      zIndex: 1,
-      position: 'relative' as const
-    };
-  }
-
-  return (
-    <div 
-      className={cellClasses}
-      style={selectionStyle}
-      onClick={handleClick}
-      onDoubleClick={() => onCellDoubleClick(rowIndex, columnId)}
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-      data-cell={`${rowIndex}-${columnId}`}
-    >
-      {isEditing ? (
-        <input
-          ref={inputRef}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={handleBlur}
-          onKeyDown={handleKeyDown}
-          onPaste={(e) => {
-            e.preventDefault();
-            const pastedText = e.clipboardData.getData('text');
-            setEditValue(pastedText);
-          }}
-          className="w-full h-full bg-white text-sm text-gray-900 font-normal"
-          style={{ 
-            margin: '-8px -8px -8px -8px', 
-            padding: '8px 8px 8px 8px',
-            border: 'none',
-            outline: 'none',
-            boxShadow: 'none',
-            borderRadius: '0',
-            backgroundColor: 'white',
-            fontFamily: 'inherit'
-          }}
-        />
-      ) : (
-        displayValue !== undefined ? (
-          <div className="w-full flex items-center justify-between">
-            <div className="flex-1 min-w-0">{displayValue}</div>
-            {loading && (
-              <div className="ml-2 w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            )}
-          </div>
-        ) : (
-          <div className="w-full flex items-center justify-between">
-            <span className="truncate flex-1">
-              {value || ''}
-            </span>
-            {loading && (
-              <div className="ml-2 w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            )}
-          </div>
-        )
-      )}
-    </div>
-  );
-});
-
-const columns: ColumnDef<Voter>[] = [
+const columns = [
   {
     id: 'select',
     header: 'Sr. No.',
-    cell: ({ row }) => (
-      <div className="flex items-center space-x-2 bg-gray-200 px-2 py-1">
-        <span className="text-gray-800 font-medium">{row.index + 1}</span>
-      </div>
-    ),
     size: 80,
+    isRowHeader: true
   },
   {
     accessorKey: 'division_id',
     header: 'Family ID',
     size: 120,
   },
-  // {
-  //   accessorKey: 'family_id',
-  //   header: 'Family ID',
-  //   size: 120,
-  // },
   {
     accessorKey: 'name',
     header: 'Name | M/F | Age',
@@ -361,22 +86,11 @@ const columns: ColumnDef<Voter>[] = [
     header: 'Mobile 2',
     size: 120,
   },
-  // Removed separate Age column: will display under Name
   {
     accessorKey: 'date_of_birth',
     header: 'DOB',
     size: 120,
   },
-  // {
-  //   accessorKey: 'parliament',
-  //   header: 'Parliament No.',
-  //   size: 140,
-  // },
-  // {
-  //   accessorKey: 'assembly',
-  //   header: 'Assembly No.',
-  //   size: 140,
-  // },
   {
     accessorKey: 'district',
     header: 'District',
@@ -397,7 +111,6 @@ const columns: ColumnDef<Voter>[] = [
     header: 'GRAM',
     size: 140,
   },
-  // Removed separate Gender column: will display under Name
   {
     accessorKey: 'address',
     header: 'Address',
@@ -423,11 +136,6 @@ const columns: ColumnDef<Voter>[] = [
     header: 'Cast',
     size: 140,
   },
-  // {
-  //   accessorKey: 'booth',
-  //   header: 'Booth',
-  //   size: 100,
-  // },
   {
     accessorKey: 'cast_id',
     header: 'Cast Id',
@@ -495,21 +203,6 @@ function DataTable({
   masterFilters?: { parliament?: string; assembly?: string; district?: string; block?: string };
   detailedFilters?: any;
 }) {
-  // Inject CSS on client after mount to avoid hydration mismatch
-  useEffect(() => {
-    try {
-      if (typeof document === 'undefined') return;
-      const existingStyle = document.getElementById('copy-blink-css');
-      if (!existingStyle) {
-        const style = document.createElement('style');
-        style.id = 'copy-blink-css';
-        style.textContent = copyBlinkCSS;
-        document.head.appendChild(style);
-      }
-    } catch (error) {
-      console.error('Failed to inject copy blink CSS:', error);
-    }
-  }, []);
   // Use filters directly to prevent unnecessary memoization issues
   const memoizedMasterFilters = masterFilters;
   const memoizedDetailedFilters = detailedFilters;
@@ -539,14 +232,27 @@ function DataTable({
   const [filterLoading, setFilterLoading] = useState(false); // Separate loading state for filters
   const [error, setError] = useState<string | null>(null);
 
-  // REMOVED: Unused states that were causing blinking
+  // Family View modal state
+  const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
+  const [familyModalFamilyId, setFamilyModalFamilyId] = useState<string>('');
+  const [familyMembers, setFamilyMembers] = useState<Voter[]>([]);
+  const [familyLoading, setFamilyLoading] = useState<boolean>(false);
+  const [familyError, setFamilyError] = useState<string | null>(null);
 
-  const fetchDivisionData = useCallback(async () => {
+  // Data fetching function
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Use pagination for better performance
+      // Check if any filters are active
+      if (!hasActiveFilters()) {
+        setData([]);
+        setPagination(prev => ({ ...prev, totalItems: 0, totalPages: 0 }));
+        setLoading(false);
+        return;
+      }
+      
       const page = pagination.currentPage;
       const limit = pagination.itemsPerPage;
       
@@ -569,7 +275,7 @@ function DataTable({
         }
       }
       
-      // Add detailed filters to API call (with DOB formatting)
+      // Add detailed filters to API call
       if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
         Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
           if (value && value !== '') {
@@ -580,9 +286,6 @@ function DataTable({
       }
       
       console.log('🔍 Fetching data with filters:', { masterFilters: memoizedMasterFilters, detailedFilters: memoizedDetailedFilters, apiUrl });
-      
-      // Log the actual request being made
-      console.log('🌐 Making API request to:', apiUrl);
       
       const response = await fetch(apiUrl);
       
@@ -602,7 +305,7 @@ function DataTable({
           throw new Error('API data is not an array');
         }
         
-        // Map API data to Voter interface (correct mapping for area_mapping API)
+        // Map API data to Voter interface
         let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
           id: String(item.id ?? index + 1),
           row_pk: typeof item.id === 'number' ? item.id : undefined,
@@ -621,8 +324,8 @@ function DataTable({
           mobile2: '',
           age: calculateAge(item.date_of_birth),
           date_of_birth: item.date_of_birth || '',
-          parliament: item.parliament || '', // ✅ FIXED: Read from database
-          assembly: item.assembly || '',     // ✅ FIXED: Read from database
+          parliament: item.parliament || '',
+          assembly: item.assembly || '',
           district: item.district || '',
           block: item.block || '',
           tehsil: item.gp || '',
@@ -636,49 +339,10 @@ function DataTable({
           cast_id: item.caste || '',
           cast_ida: item.caste_category || ''
         }));
-        // Backfill parliament and assembly via district → AC/PC mapping for consistency
-        try {
-          const districts = Array.from(new Set(mappedData.map(r => r.district).filter(Boolean)));
-          if (districts.length > 0) {
-            const mapRes = await fetch(`http://localhost:5002/api/acpc-mapping?districts=${encodeURIComponent(districts.join(','))}`);
-            if (mapRes.ok) {
-              const mapping: Record<string, { pc_id: any; ac_id: any }> = await mapRes.json();
-              mappedData = mappedData.map(row => {
-                const m = mapping[row.district];
-                if (!m) return row;
-                return {
-                  ...row,
-                  parliament: row.parliament || (m.pc_id != null ? String(m.pc_id) : ''),
-                  assembly: row.assembly || (m.ac_id != null ? String(m.ac_id) : ''),
-                };
-              });
-            }
-          }
-        } catch {}
-        // Resolve AC_CODE for each (district, block) using backend helper
-        try {
-          const pairs = Array.from(new Set(mappedData.map(r => JSON.stringify({ district: r.district, block: r.block })))).map(s => JSON.parse(s));
-          if (pairs.length > 0) {
-            const resMap = await fetch('http://localhost:5002/api/resolve-ac-codes', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pairs })
-            });
-            if (resMap.ok) {
-              const mapping = await resMap.json();
-              const norm = (v: any) => String(v ?? '').trim().toUpperCase();
-              mappedData = mappedData.map(row => {
-                const key = norm(row.district) + '|' + norm(row.block);
-                const acCode = mapping[key];
-                return acCode ? { ...row, assembly: String(acCode) } : row;
-              });
-            }
-          }
-        } catch {}
         
         setData(mappedData);
         
-        // Try to get total count from API response headers or check if we have more data
+        // Update pagination info
         let totalCount: number | string = mappedData.length;
         let totalPages = 1;
         
@@ -715,6 +379,7 @@ function DataTable({
           totalItems: totalCount,
           totalPages: totalPages
         }));
+        
       } catch (parseError) {
         console.error('❌ JSON parsing error:', parseError);
         const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parsing error';
@@ -729,143 +394,33 @@ function DataTable({
       setData([]);
       setLoading(false);
     }
-  }, [pagination.currentPage, pagination.itemsPerPage]); // Remove filter dependencies to prevent blinking
+  }, [pagination.currentPage, pagination.itemsPerPage, memoizedMasterFilters, memoizedDetailedFilters]);
 
-  // FIXED: Stable memoization to prevent blinking
-  const memoizedData = useMemo(() => data || [], [data]); // Depend on data to ensure updates are reflected
-
-  // REMOVED: currentPageData is no longer needed since we show all data
-
-  // Excel-like state management
-  const [selectedCell, setSelectedCell] = useState<{row: number, column: string} | null>(null);
-  const [editingCell, setEditingCell] = useState<{row: number, column: string} | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const [focusedCell, setFocusedCell] = useState<{row: number, column: string} | null>(null);
-  const [updatingCells, setUpdatingCells] = useState<Set<string>>(new Set());
-  
-  // Multiple cell selection state
-  const [selectionRange, setSelectionRange] = useState<{
-    start: {row: number, column: string};
-    end: {row: number, column: string};
-  } | null>(null);
-  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [lastShiftArrowTime, setLastShiftArrowTime] = useState(0);
-
-  //
-  
-  // Track successful updates to refresh data
-  const [lastUpdateTime, setLastUpdateTime] = useState<number>(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  // Copy blink effect state
-  const [isCopyBlinking, setIsCopyBlinking] = useState(false);
-
-  // Column resizing state
-  const [columnSizes, setColumnSizes] = useState<Record<string, number>>({});
-  const colResizeRef = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
-
-  // Photo availability cache map: key is recordId (row_pk or division_id)
-  const [photoAvailability, setPhotoAvailability] = useState<Record<string, boolean>>({});
-
-  // Helper: resolve unique record id for photo lookup
-  const resolveRecordId = useCallback((row: Voter): string | null => {
-    const id = row.row_pk != null ? String(row.row_pk) : (row.division_id || '').trim();
-    return id && id.length > 0 ? id : null;
-  }, []);
-
-  // Check if photo exists for a given record id (HEAD request) and cache the result
-  const checkAndCachePhoto = useCallback(async (recordId: string) => {
-    if (!recordId || photoAvailability.hasOwnProperty(recordId)) return;
-    try {
-      // Predictable photo endpoint; adjust if backend differs
-      const url = `http://localhost:5002/api/photos/${encodeURIComponent(recordId)}.jpg`;
-      const res = await fetch(url, { method: 'HEAD' });
-      setPhotoAvailability(prev => ({ ...prev, [recordId]: res.ok }));
-    } catch {
-      setPhotoAvailability(prev => ({ ...prev, [recordId]: false }));
-    }
-  }, [photoAvailability]);
-
-  // When page data changes, probe photo existence for visible rows (debounced via microtask)
+  // Effect to fetch data on component mount and filter changes
   useEffect(() => {
-    const idsToCheck: string[] = [];
-    for (const row of memoizedData) {
-      const rid = resolveRecordId(row);
-      if (rid && !photoAvailability.hasOwnProperty(rid)) idsToCheck.push(rid);
-    }
-    if (idsToCheck.length === 0) return;
-    Promise.allSettled(idsToCheck.map(id => checkAndCachePhoto(id))).catch(() => {});
-  }, [memoizedData, resolveRecordId, checkAndCachePhoto, photoAvailability]);
-  
-  // Row resizing state
-  const [rowHeights, setRowHeights] = useState<Record<number, number>>({});
-  const rowResizeRef = useRef<{ rowIndex: number; startY: number; startHeight: number } | null>(null);
+    fetchData();
+  }, [fetchData]);
 
-  // Initialize columnSizes from static column definitions
+  // Effect to listen for refresh events
   useEffect(() => {
-    if (Object.keys(columnSizes).length === 0 && Array.isArray(columns)) {
-      const map: Record<string, number> = {};
-      columns.forEach(col => {
-        const id = (col.id ? col.id : (('accessorKey' in col) ? (col.accessorKey as string) : 'unknown')) as string;
-        const size = (col as any).size || 120;
-        if (id) map[id] = size;
-      });
-      setColumnSizes(map);
-    }
-  }, []);
-
-  const startColumnResize = useCallback((e: React.MouseEvent, colId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const startX = (e as any).clientX as number;
-    const startWidth = columnSizes[colId] || 120;
-    colResizeRef.current = { colId, startX, startWidth };
-    const onMove = (ev: MouseEvent) => {
-      if (!colResizeRef.current) return;
-      const dx = ev.clientX - colResizeRef.current.startX;
-      const newWidth = Math.max(60, colResizeRef.current.startWidth + dx);
-      setColumnSizes(prev => ({ ...prev, [colResizeRef.current!.colId]: newWidth }));
+    const handleRefreshEvent = () => {
+      console.log('🔄 Refresh event received');
+      fetchData();
     };
-    const onUp = () => {
-      colResizeRef.current = null;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, [columnSizes]);
 
-  const defaultRowHeight = 28;
-  const getRowHeight = useCallback((rowIndex: number) => rowHeights[rowIndex] || defaultRowHeight, [rowHeights]);
-
-  const startRowResize = useCallback((e: React.MouseEvent, rowIndex: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const startY = (e as any).clientY as number;
-    const startHeight = rowHeights[rowIndex] || defaultRowHeight;
-    rowResizeRef.current = { rowIndex, startY, startHeight };
-    const onMove = (ev: MouseEvent) => {
-      if (!rowResizeRef.current) return;
-      const dy = ev.clientY - rowResizeRef.current.startY;
-      const newHeight = Math.max(18, rowResizeRef.current.startHeight + dy);
-      setRowHeights(prev => ({ ...prev, [rowResizeRef.current!.rowIndex]: newHeight }));
+    const handleDataAlterationUpdate = (event: CustomEvent) => {
+      console.log('🔄 Data alteration update event received:', event.detail);
+      fetchData();
     };
-    const onUp = () => {
-      rowResizeRef.current = null;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, [rowHeights]);
 
-  // Family View modal state
-  const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
-  const [familyModalFamilyId, setFamilyModalFamilyId] = useState<string>('');
-  const [familyMembers, setFamilyMembers] = useState<Voter[]>([]);
-  const [familyLoading, setFamilyLoading] = useState<boolean>(false);
-  const [familyError, setFamilyError] = useState<string | null>(null);
+    window.addEventListener('refreshDataTable', handleRefreshEvent);
+    window.addEventListener('dataAlterationUpdate', handleDataAlterationUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('refreshDataTable', handleRefreshEvent);
+      window.removeEventListener('dataAlterationUpdate', handleDataAlterationUpdate as EventListener);
+    };
+  }, [fetchData]);
 
   const openFamilyModal = useCallback(async (familyId: string) => {
     if (!familyId) {
@@ -900,7 +455,6 @@ function DataTable({
         surname: (() => {
           const name = item.name || '';
           const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
-          // ✅ FIXED: Only show surname if multiple words, otherwise blank
           return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
         })(),
         mobile1: item.mobile_number ? String(item.mobile_number) : '',
@@ -938,1786 +492,11 @@ function DataTable({
     setFamilyError(null);
     setFamilyLoading(false);
   }, []);
-  
-  const tableRef = useRef<HTMLDivElement>(null);
-  const previousMasterFiltersRef = useRef<typeof masterFilters | undefined>(undefined);
-
-  // FIXED: Stable column IDs to prevent blinking
-  const columnIds = useMemo(() => {
-    const ids = columns.map(col => {
-      if (col.id) return col.id;
-      if ('accessorKey' in col) return col.accessorKey as string;
-      return 'unknown';
-    });
-    return ids;
-  }, []); // Empty dependency array since columns is static
-
-  // Helper function to check if a cell is in selection range
-  const isCellInSelectionRange = useCallback((rowIndex: number, columnId: string) => {
-    if (!selectionRange) return false;
-    
-    const { start, end } = selectionRange;
-    const startRow = Math.min(start.row, end.row);
-    const endRow = Math.max(start.row, end.row);
-    const startColIndex = Math.min(columnIds.indexOf(start.column), columnIds.indexOf(end.column));
-    const endColIndex = Math.max(columnIds.indexOf(start.column), columnIds.indexOf(end.column));
-    
-    return rowIndex >= startRow && rowIndex <= endRow && 
-           columnIds.indexOf(columnId) >= startColIndex && columnIds.indexOf(columnId) <= endColIndex;
-  }, [selectionRange, columnIds]);
-
-  // Helper function to check if a cell is selected (using selectedCells set)
-  const isCellSelected = useCallback((rowIndex: number, columnId: string) => {
-    const cellKey = `${rowIndex}-${columnId}`;
-    return selectedCells.has(cellKey);
-  }, [selectedCells]);
-
-  // Helper function to get selected cells count
-  const getSelectedCellsCount = useCallback(() => {
-    // Use selectedCells set for accurate count
-    return selectedCells.size || 1;
-  }, [selectedCells]);
-
-  // Helper function to get sum of selected numeric cells
-  const getSelectedCellsSum = useCallback(() => {
-    if (selectedCells.size === 0) return null; // No cells selected
-    
-    let sum = 0;
-    let count = 0;
-    
-    // Iterate through selected cells
-    selectedCells.forEach(cellKey => {
-      const [rowIndex, columnId] = cellKey.split('-');
-      const rowIndexNum = parseInt(rowIndex);
-      if (memoizedData[rowIndexNum]) {
-        const value = memoizedData[rowIndexNum][columnId as keyof Voter];
-        const numValue = parseFloat(String(value));
-        if (!isNaN(numValue)) {
-          sum += numValue;
-          count++;
-        }
-      }
-    });
-    
-    return count > 0 ? { sum, count, average: sum / count } : null;
-  }, [selectedCells, memoizedData]);
-
-  // Pagination handlers - handlePageChange function
-  const handlePageChange = useCallback(async (page: number, isFilterChange: boolean = false) => {
-    console.log(`🔄 handlePageChange called: page=${page}, isFilterChange=${isFilterChange}, currentPage=${pagination.currentPage}, totalPages=${pagination.totalPages}`);
-    
-    // Guard: do not fetch when no filters are active
-    if (!hasActiveFilters()) {
-      console.log('❌ No active filters, clearing data');
-      if (!isFilterChange) {
-        setLoading(false);
-      } else {
-        setFilterLoading(false);
-      }
-      setData([]);
-      setPagination(prev => ({ ...prev, currentPage: 1, totalItems: 0, totalPages: 0 }));
-      return;
-    }
-    if (page < 1 || page > pagination.totalPages) {
-      console.log(`❌ Invalid page: ${page}, totalPages: ${pagination.totalPages}`);
-      return;
-    }
-    
-    // Update pagination state
-    setPagination(prev => ({ ...prev, currentPage: page }));
-    
-    // Reset to first cell of new page
-    setSelectedCell({ row: 0, column: columnIds[0] });
-    setFocusedCell({ row: 0, column: columnIds[0] });
-    
-    // Fetch data for the new page
-    try {
-      // Don't show loading state for filter changes to prevent blinking
-      if (!isFilterChange) {
-        setLoading(true);
-      }
-      const limit = pagination.itemsPerPage;
-      
-      // Build API URL with filters
-      let apiUrl = `http://localhost:5002/api/area_mapping?page=${page}&limit=${limit}`;
-      
-      // Add master filters to API call
-      if (memoizedMasterFilters) {
-        if (memoizedMasterFilters.parliament) {
-          apiUrl += `&parliament=${encodeURIComponent(memoizedMasterFilters.parliament)}`;
-        }
-        if (memoizedMasterFilters.assembly) {
-          apiUrl += `&assembly=${encodeURIComponent(memoizedMasterFilters.assembly)}`;
-        }
-        if (memoizedMasterFilters.district) {
-          apiUrl += `&district=${encodeURIComponent(memoizedMasterFilters.district)}`;
-        }
-        if (memoizedMasterFilters.block) {
-          apiUrl += `&block=${encodeURIComponent(memoizedMasterFilters.block)}`;
-        }
-      }
-      
-      // Add detailed filters to API call (with DOB formatting)
-      if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
-        Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
-          if (value && value !== '') {
-            const val = key === 'dateOfBirth' ? formatDateForBackend(String(value)) : String(value);
-            apiUrl += `&${key}=${encodeURIComponent(val)}`;
-          }
-        });
-      }
-      
-      console.log('🔍 Fetching page data with filters:', { page, masterFilters: memoizedMasterFilters, detailedFilters: memoizedDetailedFilters, apiUrl });
-      
-      const response = await fetch(apiUrl);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ HTTP Error Response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-      }
-      
-      const rawData = await response.text();
-      
-      try {
-        const apiData = JSON.parse(rawData);
-        
-        if (!Array.isArray(apiData)) {
-          console.error('❌ API data is not an array:', apiData);
-          throw new Error('API data is not an array');
-        }
-        
-        // Map API data to Voter interface
-        let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
-          id: String(item.id ?? index + 1),
-          row_pk: typeof item.id === 'number' ? item.id : undefined,
-          division_id: String(item.temp_family_Id ?? item.id ?? ''),
-          family_id: item.family_id || '',
-          cast_name: item.caste || '',
-          name: item.name || '',
-          fname: item.father_name || '',
-          mname: item.mother_name || '',
-          surname: (() => {
-            const name = item.name || '';
-            const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
-            return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
-          })(),
-          mobile1: item.mobile_number ? String(item.mobile_number) : '',
-          mobile2: '',
-          age: calculateAge(item.date_of_birth),
-          date_of_birth: item.date_of_birth || '',
-          parliament: item.parliament || '', // ✅ FIXED: Read from database
-          assembly: item.assembly || '',     // ✅ FIXED: Read from database
-          district: item.district || '',
-          block: item.block || '',
-          tehsil: item.gp || '',
-          village: item.village || '',
-          gender: item.gender || '',
-          address: item.address || '',
-          verify: item.verify || '',
-          family_view: item.family_view || '',
-          caste_category: item.caste_category || '',
-          religion: item.religion || item.minority_religion || '',
-          cast_id: item.caste || '',
-          cast_ida: item.caste_category || ''
-        }));
-        // Backfill parliament and assembly via district → AC/PC mapping for consistency
-        try {
-          const districts = Array.from(new Set(mappedData.map(r => r.district).filter(Boolean)));
-          if (districts.length > 0) {
-            const mapRes = await fetch(`http://localhost:5002/api/acpc-mapping?districts=${encodeURIComponent(districts.join(','))}`);
-            if (mapRes.ok) {
-              const mapping: Record<string, { pc_id: any; ac_id: any }> = await mapRes.json();
-              mappedData = mappedData.map(row => {
-                const m = mapping[row.district];
-                if (!m) return row;
-                return {
-                  ...row,
-                  parliament: row.parliament || (m.pc_id != null ? String(m.pc_id) : ''),
-                  assembly: row.assembly || (m.ac_id != null ? String(m.ac_id) : ''),
-                };
-              });
-            }
-          }
-        } catch {}
-        try {
-          const pairs = Array.from(new Set(mappedData.map(r => JSON.stringify({ district: r.district, block: r.block })))).map(s => JSON.parse(s));
-          if (pairs.length > 0) {
-            const resMap = await fetch('http://localhost:5002/api/resolve-ac-codes', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pairs })
-            });
-            if (resMap.ok) {
-              const mapping = await resMap.json();
-              const norm = (v: any) => String(v ?? '').trim().toUpperCase();
-              mappedData = mappedData.map(row => {
-                const key = norm(row.district) + '|' + norm(row.block);
-                const acCode = mapping[key];
-                return acCode ? { ...row, assembly: String(acCode) } : row;
-              });
-            }
-          }
-        } catch {}
-        
-        console.log(`✅ Page ${page} data fetched successfully: ${mappedData.length} records`);
-        setData(mappedData);
-        
-        // Update pagination info - use better logic for pagination
-        let totalCount: number | string = mappedData.length;
-        let totalPages = 1;
-        
-        // If we got exactly the limit, there might be more data
-        if (mappedData.length === limit) {
-          // Try to fetch one more record to see if there's more data
-          try {
-            const nextPageResponse = await fetch(`${apiUrl}&page=${page + 1}&limit=1`);
-            if (nextPageResponse.ok) {
-              const nextPageData = await nextPageResponse.json();
-              if (Array.isArray(nextPageData) && nextPageData.length > 0) {
-                // There's more data, estimate total
-                totalCount = '10000+'; // Show approximate total
-                totalPages = Math.ceil(10000 / limit);
-              } else {
-                // No more data, this is the last page
-                totalCount = (page - 1) * limit + mappedData.length;
-                totalPages = page;
-              }
-            }
-          } catch (error) {
-            // If we can't check next page, assume there's more data
-            totalCount = '10000+';
-            totalPages = Math.ceil(10000 / limit);
-          }
-        } else {
-          // We got less than the limit, so this is the last page
-          totalCount = (page - 1) * limit + mappedData.length;
-          totalPages = page;
-        }
-        
-        setPagination(prev => ({
-          ...prev,
-          totalItems: totalCount,
-          totalPages: totalPages
-        }));
-        
-      } catch (parseError) {
-        console.error('❌ JSON parsing error:', parseError);
-        const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parsing error';
-        throw new Error(`Failed to parse API response: ${errorMessage}`);
-      }
-      
-      // Only set loading to false if it's not a filter change
-      if (!isFilterChange) {
-        setLoading(false);
-      } else {
-        // Set filter loading to false when filter change is complete
-        setFilterLoading(false);
-      }
-    } catch (error) {
-      console.error('❌ Error fetching data for page:', page, error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setError(`Failed to fetch data for page ${page}: ${errorMessage}`);
-      // Only set loading to false if it's not a filter change
-      if (!isFilterChange) {
-        setLoading(false);
-      } else {
-        // Set filter loading to false when filter change is complete
-        setFilterLoading(false);
-      }
-    }
-  }, [columnIds, pagination.totalPages, pagination.itemsPerPage, memoizedMasterFilters, memoizedDetailedFilters]);
-
-  const handleItemsPerPageChange = useCallback(async (newItemsPerPage: number) => {
-    // Guard: if no filters, keep table empty
-    if (!hasActiveFilters()) {
-      setPagination(prev => ({ ...prev, itemsPerPage: newItemsPerPage, currentPage: 1, totalItems: 0, totalPages: 0 }));
-      setData([]);
-      setLoading(false);
-      return;
-    }
-    setPagination(prev => ({ 
-      ...prev, 
-      itemsPerPage: newItemsPerPage,
-      currentPage: 1 // Reset to first page
-    }));
-    
-    // Reset to first cell
-    setSelectedCell({ row: 0, column: columnIds[0] });
-    setFocusedCell({ row: 0, column: columnIds[0] });
-    
-    // Fetch data with new page size
-    try {
-      setLoading(true);
-      
-      // Build API URL with filters
-      let apiUrl = `http://localhost:5002/api/area_mapping?page=1&limit=${newItemsPerPage}`;
-      
-      // Add master filters to API call
-      if (memoizedMasterFilters) {
-        if (memoizedMasterFilters.parliament) {
-          apiUrl += `&parliament=${encodeURIComponent(memoizedMasterFilters.parliament)}`;
-        }
-        if (memoizedMasterFilters.assembly) {
-          apiUrl += `&assembly=${encodeURIComponent(memoizedMasterFilters.assembly)}`;
-        }
-        if (memoizedMasterFilters.block) {
-          apiUrl += `&block=${encodeURIComponent(memoizedMasterFilters.block)}`;
-        }
-      }
-      
-      // Add detailed filters to API call (with DOB formatting)
-      if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
-        Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
-          if (value && value !== '') {
-            const val = key === 'dateOfBirth' ? formatDateForBackend(String(value)) : String(value);
-            apiUrl += `&${key}=${encodeURIComponent(val)}`;
-          }
-        });
-      }
-      
-      console.log('🔍 Fetching data with new page size and filters:', { newItemsPerPage, masterFilters: memoizedMasterFilters, detailedFilters: memoizedDetailedFilters, apiUrl });
-      
-      const response = await fetch(apiUrl);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ HTTP Error Response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-      }
-      
-      const rawData = await response.text();
-      
-      try {
-        const apiData = JSON.parse(rawData);
-        
-        if (!Array.isArray(apiData)) {
-          console.error('❌ API data is not an array:', apiData);
-          throw new Error('API data is not an array');
-        }
-        
-        // Map API data to Voter interface
-        let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
-          id: String(item.id ?? index + 1),
-          row_pk: typeof item.id === 'number' ? item.id : undefined,
-          division_id: String(item.temp_family_Id ?? item.id ?? ''),
-          family_id: item.family_id || '',
-          cast_name: item.caste || '',
-          name: item.name || '',
-          fname: item.father_name || '',
-          mname: item.mother_name || '',
-          surname: (() => {
-            const name = item.name || '';
-            const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
-            return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
-          })(),
-          mobile1: item.mobile_number ? String(item.mobile_number) : '',
-          mobile2: '',
-          age: calculateAge(item.date_of_birth),
-          date_of_birth: item.date_of_birth || '',
-          parliament: item.parliament || '', // ✅ FIXED: Read from database
-          assembly: item.assembly || '',     // ✅ FIXED: Read from database
-          district: item.district || '',
-          block: item.block || '',
-          tehsil: item.gp || '',
-          village: item.village || '',
-          gender: item.gender || '',
-          address: item.address || '',
-          verify: item.verify || '',
-          family_view: item.family_view || '',
-          caste_category: item.caste_category || '',
-          religion: item.religion || item.minority_religion || '',
-          cast_id: item.caste || '',
-          cast_ida: item.caste_category || ''
-        }));
-        // Backfill parliament and assembly via district → AC/PC mapping for consistency
-        try {
-          const districts = Array.from(new Set(mappedData.map(r => r.district).filter(Boolean)));
-          if (districts.length > 0) {
-            const mapRes = await fetch(`http://localhost:5002/api/acpc-mapping?districts=${encodeURIComponent(districts.join(','))}`);
-            if (mapRes.ok) {
-              const mapping: Record<string, { pc_id: any; ac_id: any }> = await mapRes.json();
-              mappedData = mappedData.map(row => {
-                const m = mapping[row.district];
-                if (!m) return row;
-                return {
-                  ...row,
-                  parliament: row.parliament || (m.pc_id != null ? String(m.pc_id) : ''),
-                  assembly: row.assembly || (m.ac_id != null ? String(m.ac_id) : ''),
-                };
-              });
-            }
-          }
-        } catch {}
-        try {
-          const pairs = Array.from(new Set(mappedData.map(r => JSON.stringify({ district: r.district, block: r.block })))).map(s => JSON.parse(s));
-          if (pairs.length > 0) {
-            const resMap = await fetch('http://localhost:5002/api/resolve-ac-codes', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pairs })
-            });
-            if (resMap.ok) {
-              const mapping = await resMap.json();
-              const norm = (v: any) => String(v ?? '').trim().toUpperCase();
-              mappedData = mappedData.map(row => {
-                const key = norm(row.district) + '|' + norm(row.block);
-                const acCode = mapping[key];
-                return acCode ? { ...row, assembly: String(acCode) } : row;
-              });
-            }
-          }
-        } catch {}
-        
-        setData(mappedData);
-        
-        // Update pagination info
-        let totalCount: number | string = mappedData.length;
-        let totalPages = 1;
-        
-        // If we got exactly the limit, there might be more data
-        if (mappedData.length === newItemsPerPage) {
-          // Try to fetch one more record to see if there's more data
-          try {
-            const nextPageResponse = await fetch(`http://localhost:5002/api/area_mapping?page=2&limit=1`);
-            if (nextPageResponse.ok) {
-              const nextPageData = await nextPageResponse.json();
-              if (Array.isArray(nextPageData) && nextPageData.length > 0) {
-                // There's more data, estimate total
-                totalCount = '10000+'; // Show approximate total
-                totalPages = Math.ceil(10000 / newItemsPerPage);
-              } else {
-                // No more data, this is the last page
-                totalCount = mappedData.length;
-                totalPages = 1;
-              }
-            }
-          } catch (error) {
-            // If we can't check next page, assume there's more data
-            totalCount = '10000+';
-            totalPages = Math.ceil(10000 / newItemsPerPage);
-          }
-        } else {
-          // We got less than the limit, so this is the last page
-          totalCount = mappedData.length;
-          totalPages = 1;
-        }
-        
-        setPagination(prev => ({
-          ...prev,
-          totalItems: totalCount,
-          totalPages: totalPages
-        }));
-        
-      } catch (parseError) {
-        console.error('❌ JSON parsing error:', parseError);
-        const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parsing error';
-        throw new Error(`Failed to parse API response: ${errorMessage}`);
-      }
-      
-      setLoading(false);
-    } catch (error) {
-      console.error('❌ Error fetching data with new page size:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setError(`Failed to fetch data with new page size: ${errorMessage}`);
-      setLoading(false);
-    }
-  }, [columnIds, memoizedMasterFilters, memoizedDetailedFilters]);
-
-  // Effect to fetch data on component mount - ONLY if filters are selected
-  useEffect(() => {
-    // Check if any filters are selected
-    const hasMasterFilters = memoizedMasterFilters && Object.values(memoizedMasterFilters).some(val => val && val !== '');
-    const hasDetailedFilters = memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0 && Object.values(memoizedDetailedFilters).some(val => val && val !== '');
-    
-    // Only fetch data if filters are selected
-    if (hasMasterFilters || hasDetailedFilters) {
-      const initialFetch = async () => {
-        try {
-          setLoading(true);
-          
-          // Use pagination for better performance
-          const page = 1;
-          const limit = pagination.itemsPerPage;
-          
-          // Build API URL with filters
-          let apiUrl = `http://localhost:5002/api/area_mapping?page=${page}&limit=${limit}`;
-          
-          // Add master filters to API call
-          if (memoizedMasterFilters) {
-            if (memoizedMasterFilters.parliament) {
-              apiUrl += `&parliament=${encodeURIComponent(memoizedMasterFilters.parliament)}`;
-            }
-            if (memoizedMasterFilters.assembly) {
-              apiUrl += `&assembly=${encodeURIComponent(memoizedMasterFilters.assembly)}`;
-            }
-            if (memoizedMasterFilters.district) {
-              apiUrl += `&district=${encodeURIComponent(memoizedMasterFilters.district)}`;
-            }
-            if (memoizedMasterFilters.block) {
-              apiUrl += `&block=${encodeURIComponent(memoizedMasterFilters.block)}`;
-            }
-          }
-          
-          // Add detailed filters to API call
-          if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
-            Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
-              if (value && value !== '') {
-                apiUrl += `&${key}=${encodeURIComponent(String(value))}`;
-              }
-            });
-          }
-          
-          console.log('🔍 Initial fetch with filters:', { masterFilters: memoizedMasterFilters, detailedFilters: memoizedDetailedFilters, apiUrl });
-          
-          const response = await fetch(apiUrl);
-          
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ Initial fetch HTTP Error Response:', errorText);
-            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-          }
-          
-          const rawData = await response.text();
-          
-          try {
-            const apiData = JSON.parse(rawData);
-            
-            if (!Array.isArray(apiData)) {
-              throw new Error('API data is not an array');
-            }
-            
-            // Map API data to Voter interface (correct mapping for area_mapping API) - FIRST INSTANCE
-            let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
-              id: String(item.id ?? index + 1),
-              row_pk: typeof item.id === 'number' ? item.id : undefined,
-              division_id: String(item.temp_family_Id || item.temp_family_id || ''),
-              family_id: item.family_id || '',
-              cast_name: item.caste || '',
-              name: item.name || '',
-              fname: item.father_name || '',
-              mname: item.mother_name || '',
-              surname: (() => {
-                const name = item.name || '';
-                const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
-                // ✅ FIXED: Only show surname if multiple words, otherwise blank
-                return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
-              })(),
-              mobile1: item.mobile_number ? String(item.mobile_number) : '',
-              mobile2: '',
-              age: calculateAge(item.date_of_birth),
-              date_of_birth: item.date_of_birth || '',
-              parliament: item.parliament || '', // ✅ FIXED: Read from database
-              assembly: item.assembly || '',     // ✅ FIXED: Read from database
-              district: item.district || '',
-              block: item.block || '',
-              tehsil: item.gp || '',
-              village: item.village || '',
-              gender: item.gender || '',
-              address: item.address || '',
-              verify: item.verify || '',
-              family_view: item.family_view || '',
-              caste_category: item.caste_category || '',
-              religion: item.religion || item.minority_religion || '',
-              cast_id: item.caste || '',
-              cast_ida: item.caste_category || ''
-            }));
-
-            try {
-              const districts = Array.from(new Set(mappedData.map(r => r.district).filter(Boolean)));
-              if (districts.length > 0) {
-                const mapRes = await fetch(`http://localhost:5002/api/acpc-mapping?districts=${encodeURIComponent(districts.join(','))}`);
-                if (mapRes.ok) {
-                  const mapping: Record<string, { pc_id: any; ac_id: any }> = await mapRes.json();
-                  mappedData = mappedData.map(row => {
-                    const m = mapping[row.district];
-                    if (m) {
-                      return {
-                        ...row,
-                        parliament: row.parliament || (m.pc_id != null ? String(m.pc_id) : ''),
-                        assembly: row.assembly || (m.ac_id != null ? String(m.ac_id) : ''),
-                      };
-                    }
-                    return row;
-                  });
-                }
-              }
-            } catch {}
-            
-            setData(mappedData);
-            
-            // Try to get total count from API response headers or check if we have more data
-            let totalCount: number | string = mappedData.length;
-            let totalPages = 1;
-            
-            // If we got exactly the limit, there might be more data
-            if (mappedData.length === pagination.itemsPerPage) {
-              // Try to fetch one more record to see if there's more data
-              try {
-                const nextPageResponse = await fetch(`http://localhost:5002/api/area_mapping?page=2&limit=1`);
-                if (nextPageResponse.ok) {
-                  const nextPageData = await nextPageResponse.json();
-                  if (Array.isArray(nextPageData) && nextPageData.length > 0) {
-                    // There's more data, estimate total
-                    totalCount = '10000+'; // Show approximate total
-                    totalPages = Math.ceil(10000 / pagination.itemsPerPage);
-                  } else {
-                    // No more data, this is the last page
-                    totalCount = mappedData.length;
-                    totalPages = 1;
-                  }
-                }
-              } catch (error) {
-                // If we can't check next page, assume there's more data
-                totalCount = '10000+';
-                totalPages = Math.ceil(10000 / pagination.itemsPerPage);
-              }
-            } else {
-              // We got less than the limit, so this is the last page
-              totalCount = mappedData.length;
-              totalPages = 1;
-            }
-            
-            setPagination(prev => ({
-              ...prev,
-              totalItems: totalCount,
-              totalPages: totalPages
-            }));
-            
-          } catch (parseError) {
-            console.error('JSON parsing error:', parseError);
-            const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parsing error';
-            throw new Error(`Failed to parse API response: ${errorMessage}`);
-          }
-          
-          setLoading(false);
-        } catch (error) {
-          // console.error('Error fetching initial data:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          setError(`Failed to fetch initial data: ${errorMessage}`);
-          setData([]);
-          setLoading(false);
-        }
-      };
-      
-      initialFetch();
-    } else {
-      // No filters selected, show empty state
-      setData([]);
-      setLoading(false);
-      setPagination(prev => ({
-        ...prev,
-        totalItems: 0,
-        totalPages: 0
-      }));
-    }
-  }, [pagination.itemsPerPage, memoizedMasterFilters, memoizedDetailedFilters]); // Depend on filters to trigger initial load
-
-  // Filter effect: only run when actual filter values change, not on page navigation
-  const lastFiltersRef = useRef<string>('');
-  const filterDebounceRef = useRef<number | null>(null);
-  useEffect(() => {
-    // Always clear any pending debounce to avoid race that resets page after manual navigation
-    if (filterDebounceRef.current) {
-      clearTimeout(filterDebounceRef.current);
-      filterDebounceRef.current = null;
-    }
-
-    if (loading) return; // avoid on initial load transitions
-    const master = memoizedMasterFilters || {};
-    const detailed = memoizedDetailedFilters || {};
-    const currentFilters = stableStringify({ ...master, ...detailed });
-    if (currentFilters === lastFiltersRef.current) return; // no real change
-    lastFiltersRef.current = currentFilters;
-
-    const hasMasterFilters = Object.values(master).some(val => val && val !== '');
-    const hasDetailedFilters = Object.values(detailed).some(val => val && val !== '');
-    
-    // If no filters are selected, clear data and show empty state
-    if (!(hasMasterFilters || hasDetailedFilters)) {
-      setData([]);
-      setPagination(prev => ({
-        ...prev,
-        totalItems: 0,
-        totalPages: 0
-      }));
-      return;
-    }
-
-    filterDebounceRef.current = window.setTimeout(() => {
-      console.log('🔍 Filters changed, refetching data:', { masterFilters: master, detailedFilters: detailed });
-      setFilterLoading(true);
-      // Reset to first page and refetch, but only once per filter-change
-      setPagination(prev => ({ ...prev, currentPage: 1 }));
-      handlePageChange(1, true);
-    }, 250);
-    return () => {
-      if (filterDebounceRef.current) {
-        clearTimeout(filterDebounceRef.current);
-        filterDebounceRef.current = null;
-      }
-    };
-  }, [memoizedMasterFilters, memoizedDetailedFilters, loading, handlePageChange]);
-
-  // Effect to refresh data after successful updates to ensure backend sync
-  // DISABLED: User prefers no automatic refresh, only immediate cell updates
-  // useEffect(() => {
-  //   if (lastUpdateTime > 0) {
-  //     // Add a small delay to allow backend to process the update
-  //     const timeoutId = setTimeout(() => {
-  //       console.log('🔄 Refreshing data to ensure backend sync...');
-  //       setIsRefreshing(true);
-  //       fetchDivisionData().finally(() => {
-  //         setIsRefreshing(false);
-  //       });
-  //     }, 1000); // 1 second delay
-  //     
-  //     return () => clearTimeout(timeoutId);
-  //   }
-  // }, [lastUpdateTime, fetchDivisionData]);
-
-  const handleUpdateData = useCallback(async (rowIndex: number, columnId: string, value: any) => {
-    const cellKey = `${rowIndex}-${columnId}`;
-    
-    try {
-      // Set loading state for this cell
-      setUpdatingCells(prev => new Set(prev).add(cellKey));
-      
-      // Only update if we have actual data for this row
-      const voter = memoizedData && memoizedData[rowIndex];
-      if (!voter) {
-        // console.log(`Cannot update row ${rowIndex} - no data available`);
-        return;
-      }
-      
-      // Determine primary key for update: prefer DB primary key 'id', fallback to DIVISION_ID
-      const recordId = (voter.row_pk != null ? String(voter.row_pk) : (voter.division_id || '')).trim();
-      if (!recordId) {
-        // console.error('❌ Missing primary key (id or DIVISION_ID) for this row, aborting update', { voter });
-        alert('Cannot update this row: missing id/DIVISION_ID from API');
-        return;
-      }
-      
-      // Map frontend column IDs to backend column names for area_mapping API
-      const columnMapping: { [key: string]: string } = {
-        'id': 'id',
-        'name': 'name',
-        'fname': 'father_name',
-        'mname': 'mother_name',
-        'surname': 'caste',
-        'mobile1': 'mobile_number',
-        'mobile2': 'mobile_number',
-        'age': 'date_of_birth', // Age is calculated from date_of_birth
-        'date_of_birth': 'date_of_birth',
-        'parliament': 'parliament', // ✅ FIXED: Parliament updates parliament column
-        'assembly': 'assembly',     // ✅ FIXED: Assembly updates assembly column
-        'district': 'district',
-        'block': 'block',
-        'tehsil': 'gp',
-        'village': 'village',
-        'gender': 'gender',
-        'family_id': 'family_id',
-        'address': 'address',
-        'verify': 'verify',
-        'family_view': 'family_view',
-        'caste_category': 'caste_category',
-        'religion': 'minority_religion',
-        'cast_id': 'caste',
-        'cast_ida': 'caste_category'
-      };
-      
-      const backendColumnName = columnMapping[columnId];
-      if (!backendColumnName) {
-        console.error(`No mapping found for column: ${columnId}`);
-        return;
-      }
-      
-      // Call the backend API to update the data
-      const response = await fetch(`http://localhost:5002/api/area_mapping/${recordId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          columnName: backendColumnName,
-          value: value
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Backend error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-      }
-      
-      const result = await response.json();
-      
-      // Update the local state to reflect the change immediately
-      setData(prevData => {
-        const newData = prevData.map((item, index) => {
-          if (index === rowIndex) {
-            const updatedItem = { ...item, [columnId]: value };
-            
-            // Special handling: If we're updating the name, also update the surname column
-            if (columnId === 'name') {
-              const nameParts = value.split(' ').filter((part: string) => part.trim() !== '');
-              // ✅ FIXED: Only show surname if multiple words, otherwise blank
-              updatedItem.surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
-            }
-            
-            return updatedItem;
-          }
-          return item;
-        });
-        return newData;
-      });
-      
-
-      
-
-      
-    } catch (error) {
-      console.error('Error updating voter:', error);
-      // Show error to user
-      alert(`Error updating data: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      // Remove loading state for this cell
-      setUpdatingCells(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(cellKey);
-        return newSet;
-      });
-    }
-  }, [memoizedData]);
-
-  // Memoize grid dimensions to avoid recalculation
-  const gridDimensions = useMemo(() => {
-    // Significantly reduce rows for much better performance
-    const maxVisibleRows = Math.max(15, pagination?.itemsPerPage || 15);
-    const maxRows = Math.max(maxVisibleRows, memoizedData?.length || 0);
-    const maxCols = columnIds.length;
-    return { maxRows, maxCols };
-  }, [pagination?.itemsPerPage, memoizedData?.length, columnIds.length]);
-
-  // Remove orphaned reference to updateSelectionWithArrow (handled inline)
-  /*
-  updateSelectionWithArrow = (fromRow: number, fromColumnId: string, direction: 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight') => {
-    const start = selectionRange ? selectionRange.start : { row: fromRow, column: fromColumnId };
-    const currentEndRow = selectionRange ? selectionRange.end.row : fromRow;
-    const currentEndColId = selectionRange ? selectionRange.end.column : fromColumnId;
-    const currentEndColIndex = columnIds.indexOf(currentEndColId);
-    let newEndRow = currentEndRow;
-    let newEndColIndex = currentEndColIndex;
-    const { maxRows, maxCols } = gridDimensions;
-    switch (direction) {
-      case 'ArrowUp':
-        newEndRow = Math.max(0, currentEndRow - 1);
-        break;
-      case 'ArrowDown':
-        newEndRow = Math.min((memoizedData?.length || maxRows) - 1, currentEndRow + 1);
-        break;
-      case 'ArrowLeft':
-        newEndColIndex = Math.max(0, currentEndColIndex - 1);
-        break;
-      case 'ArrowRight':
-        newEndColIndex = Math.min(maxCols - 1, currentEndColIndex + 1);
-        break;
-    }
-    const newEndColId = columnIds[newEndColIndex];
-    if (!newEndColId) return;
-    const newRange = { start, end: { row: newEndRow, column: newEndColId } };
-    setSelectionRange(newRange);
-    const startRow = Math.min(newRange.start.row, newRange.end.row);
-    const endRow = Math.max(newRange.start.row, newRange.end.row);
-    const startColIndex = Math.min(columnIds.indexOf(newRange.start.column), columnIds.indexOf(newRange.end.column));
-    const endColIndex = Math.max(columnIds.indexOf(newRange.start.column), columnIds.indexOf(newRange.end.column));
-    const newSet = new Set<string>();
-    for (let r = startRow; r <= endRow; r++) {
-      for (let c = startColIndex; c <= endColIndex; c++) {
-        const colId = columnIds[c];
-        if (colId) newSet.add(`${r}-${colId}`);
-      }
-    }
-    setSelectedCells(newSet);
-  };
-  */
-
-  // Consolidated navigation function to prevent conflicts
-  const navigateToCell = useCallback((fromRow: number, fromColumnId: string, toRow: number, toColumnId: string) => {
-    // Immediate state updates for instant response
-    setSelectedCell({ row: toRow, column: toColumnId });
-    setFocusedCell({ row: toRow, column: toColumnId });
-  }, []);
-
-  const handleUpdateAndNavigate = useCallback(async (rowIndex: number, columnId: string, value: any, navigationKey: string) => {
-    try {
-      // First save the data (await the update)
-      await handleUpdateData(rowIndex, columnId, value);
-      
-      // Use the consolidated navigation function
-      const currentColumnIndex = columnIds.indexOf(columnId);
-      const { maxRows, maxCols } = gridDimensions;
-      
-      let newRow = rowIndex;
-      let newCol = currentColumnIndex;
-      
-      switch (navigationKey) {
-        case 'ArrowDown':
-          newRow = Math.min(maxRows - 1, rowIndex + 1);
-          break;
-        case 'ArrowUp':
-          newRow = Math.max(0, rowIndex - 1);
-          break;
-        case 'ArrowRight':
-          if (currentColumnIndex < maxCols - 1) {
-            newCol = currentColumnIndex + 1;
-          } else if (rowIndex < maxRows - 1) {
-            newCol = 0;
-            newRow = rowIndex + 1;
-          }
-          break;
-        case 'ArrowLeft':
-          if (currentColumnIndex > 0) {
-            newCol = currentColumnIndex - 1;
-          } else if (rowIndex > 0) {
-            newCol = maxCols - 1;
-            newRow = rowIndex - 1;
-          }
-          break;
-      }
-      
-      if (newRow !== rowIndex || newCol !== currentColumnIndex) {
-        const newColumnId = columnIds[newCol];
-        
-        // Validate that the target cell exists
-        if (newColumnId && newRow >= 0 && newRow < maxRows && newCol >= 0 && newCol < maxCols) {
-          navigateToCell(rowIndex, columnId, newRow, newColumnId);
-        }
-      }
-    } catch (error) {
-      console.error('Error in updateAndNavigate:', error);
-    }
-  }, [handleUpdateData, columnIds, gridDimensions, navigateToCell]);
-
-  // Throttle cell selection updates
-  const throttleTimeoutRef = useRef<number | null>(null);
-  
-  const handleCellClick = useCallback((rowIndex: number, columnId: string, event: React.MouseEvent) => {
-    // Clear any pending throttled update
-    if (throttleTimeoutRef.current) {
-      clearTimeout(throttleTimeoutRef.current);
-    }
-    
-    // Handle multiple cell selection with Shift key (Excel-like behavior)
-    if (event.shiftKey && selectedCell) {
-      // Add the clicked cell to selected cells set
-      const clickedCellKey = `${rowIndex}-${columnId}`;
-      setSelectedCells(prev => new Set([...prev, clickedCellKey]));
-      setSelectedCell({ row: rowIndex, column: columnId });
-      setFocusedCell({ row: rowIndex, column: columnId });
-    } else if (event.ctrlKey || event.metaKey) {
-      // Ctrl/Cmd+Click: Add to existing selection (individual cell selection)
-      const clickedCellKey = `${rowIndex}-${columnId}`;
-      setSelectedCells(prev => new Set([...prev, clickedCellKey]));
-      setSelectedCell({ row: rowIndex, column: columnId });
-      setFocusedCell({ row: rowIndex, column: columnId });
-    } else {
-      // Normal click: Clear previous selection and select new cell
-      setSelectedCells(new Set([`${rowIndex}-${columnId}`]));
-      setSelectedCell({ row: rowIndex, column: columnId });
-      setFocusedCell({ row: rowIndex, column: columnId });
-    }
-    
-    if (editingCell) {
-      setEditingCell(null);
-      setEditValue('');
-    }
-  }, [editingCell, selectedCell]);
-
-  const handleCellDoubleClick = useCallback((rowIndex: number, columnId: string) => {
-    if (columnId === 'select' || columnId === 'verify') return; // Don't edit row numbers or verify column
-    
-    // Allow editing even for empty cells - get current value or empty string
-    const currentValue = (memoizedData && memoizedData[rowIndex]) ? (memoizedData[rowIndex]?.[columnId as keyof Voter] || '') : '';
-    setEditValue(String(currentValue));
-    setEditingCell({ row: rowIndex, column: columnId });
-    setSelectedCell({ row: rowIndex, column: columnId });
-    setFocusedCell({ row: rowIndex, column: columnId });
-  }, [memoizedData]);
-
-  const handleCellKeyDown = useCallback((e: React.KeyboardEvent, rowIndex: number, columnId: string) => {
-    if (editingCell) return; // Don't handle navigation while editing
-
-    const currentColumnIndex = columnIds.indexOf(columnId);
-    const { maxRows, maxCols } = gridDimensions;
-    
-    
-    
-    let newRow = rowIndex;
-    let newCol = currentColumnIndex;
-
-    switch (e.key) {
-      case 'ArrowUp':
-        newRow = Math.max(0, rowIndex - 1);
-        e.preventDefault();
-        break;
-      case 'ArrowDown':
-        newRow = Math.min(maxRows - 1, rowIndex + 1);
-        e.preventDefault();
-        break;
-      case 'ArrowLeft':
-        newCol = Math.max(0, currentColumnIndex - 1);
-        e.preventDefault();
-        break;
-      case 'ArrowRight':
-        newCol = Math.min(maxCols - 1, currentColumnIndex + 1);
-        e.preventDefault();
-        break;
-      case 'Tab':
-        if (e.shiftKey) {
-          // Shift+Tab: Move to previous cell
-          if (currentColumnIndex > 0) {
-            newCol = currentColumnIndex - 1;
-          } else if (rowIndex > 0) {
-            newCol = maxCols - 1;
-            newRow = rowIndex - 1;
-          }
-        } else {
-          // Tab: Move to next cell
-          if (currentColumnIndex < maxCols - 1) {
-            newCol = currentColumnIndex + 1;
-          } else if (rowIndex < maxRows - 1) {
-            newCol = 0;
-            newRow = rowIndex + 1;
-          }
-        }
-        e.preventDefault();
-        e.stopPropagation();
-        break;
-      case 'Enter':
-        // SIMPLE: Enter key ONLY moves down, never edits
-        newRow = Math.min(maxRows - 1, rowIndex + 1);
-        e.preventDefault();
-        e.stopPropagation();
-        break;
-      case 'F2':
-        if (columnId !== 'select' && columnId !== 'verify') {
-          // Allow editing even for empty cells - get current value or empty string
-          const currentValue = (memoizedData && memoizedData[rowIndex]) ? (memoizedData[rowIndex]?.[columnId as keyof Voter] || '') : '';
-          setEditValue(String(currentValue));
-          setEditingCell({ row: rowIndex, column: columnId });
-          setSelectedCell({ row: rowIndex, column: columnId });
-          setFocusedCell({ row: rowIndex, column: columnId });
-        }
-        e.preventDefault();
-        break;
-      case 'Escape':
-        // Clear selection range and keep only the current cell selected
-        if (selectionRange) {
-          setSelectionRange(null);
-        }
-        e.preventDefault();
-        break;
-      case 'a':
-        // Ctrl+A: Select all cells
-        if (e.ctrlKey || e.metaKey) {
-          setSelectionRange({
-            start: { row: 0, column: columnIds[0] },
-            end: { row: Math.max(0, (memoizedData?.length || 1) - 1), column: columnIds[columnIds.length - 1] }
-          });
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        break;
-      case 'c':
-        // Ctrl+C: Copy selected cells
-        if (e.ctrlKey || e.metaKey) {
-          if (selectionRange) {
-            const { start, end } = selectionRange;
-            const startRow = Math.min(start.row, end.row);
-            const endRow = Math.max(start.row, end.row);
-            const startColIndex = Math.min(columnIds.indexOf(start.column), columnIds.indexOf(end.column));
-            const endColIndex = Math.max(columnIds.indexOf(start.column), columnIds.indexOf(end.column));
-            
-            let csvData = '';
-            
-            // Add data rows ONLY (no headers)
-            for (let row = startRow; row <= endRow; row++) {
-              for (let col = startColIndex; col <= endColIndex; col++) {
-                const columnId = columnIds[col];
-                if (columnId && memoizedData[row]) {
-                  const value = memoizedData[row][columnId as keyof Voter] || '';
-                  csvData += (col > startColIndex ? '\t' : '') + value;
-                }
-              }
-              csvData += '\n';
-            }
-            
-            navigator.clipboard.writeText(csvData).catch(err => {
-              console.error('Failed to copy to clipboard:', err);
-            });
-          }
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        break;
-      case 'Delete':
-      case 'Backspace':
-        if (columnId !== 'select' && columnId !== 'verify') {
-          handleUpdateData(rowIndex, columnId, '');
-        }
-        e.preventDefault();
-        break;
-      default:
-        // Direct typing: Any printable character starts editing immediately
-        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && columnId !== 'select' && columnId !== 'verify') {
-          setEditValue(e.key);
-          setEditingCell({ row: rowIndex, column: columnId });
-          setSelectedCell({ row: rowIndex, column: columnId });
-          setFocusedCell({ row: rowIndex, column: columnId });
-          e.preventDefault();
-          e.stopPropagation();
-          return;
-        }
-        
-        // Handle Shift + Arrow keys for range selection
-        if (e.shiftKey && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-          // Add throttling to prevent rapid selection changes
-          const now = Date.now();
-          if (now - lastShiftArrowTime < 100) { // 100ms throttle
-            e.preventDefault();
-            e.stopPropagation();
-            return;
-          }
-          setLastShiftArrowTime(now);
-          
-
-          
-          let targetRow = rowIndex;
-          let targetCol = currentColumnIndex;
-          
-          switch (e.key) {
-            case 'ArrowUp':
-              targetRow = Math.max(0, rowIndex - 1);
-              break;
-            case 'ArrowDown':
-              targetRow = Math.min((memoizedData?.length || 1) - 1, rowIndex + 1);
-              break;
-            case 'ArrowLeft':
-              targetCol = Math.max(0, currentColumnIndex - 1);
-              break;
-            case 'ArrowRight':
-              targetCol = Math.min(columnIds.length - 1, currentColumnIndex + 1);
-              break;
-          }
-          
-
-          
-          if (targetRow !== rowIndex || targetCol !== currentColumnIndex) {
-            const targetColumnId = columnIds[targetCol];
-            if (targetColumnId) {
-              // Add the target cell to selected cells set
-              const targetCellKey = `${targetRow}-${targetColumnId}`;
-              setSelectedCells(prev => new Set([...prev, targetCellKey]));
-              
-              // Update the focused cell
-              setSelectedCell({ row: targetRow, column: targetColumnId });
-              setFocusedCell({ row: targetRow, column: targetColumnId });
-            }
-          }
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        // REMOVED: No more "type to edit" - only F2 and double-click should edit
-        break;
-    }
-
-    if (newRow !== rowIndex || newCol !== currentColumnIndex) {
-      const newColumnId = columnIds[newCol];
-      
-      // Validate that the target cell exists
-      if (newColumnId && newRow >= 0 && newRow < maxRows && newCol >= 0 && newCol < maxCols) {
-        // Use the consolidated navigation function
-        navigateToCell(rowIndex, columnId, newRow, newColumnId);
-      }
-    }
-  }, [memoizedData, columnIds, editingCell, handleUpdateData, gridDimensions, navigateToCell, selectedCells]);
-
-  const handleStopEditing = useCallback(() => {
-    setEditingCell(null);
-    setEditValue('');
-  }, []);
-
-  // Optimized effect to focus the selected cell (immediate for better responsiveness)
-  useEffect(() => {
-    if (selectedCell && !editingCell) {
-      const cellSelector = `[data-cell="${selectedCell.row}-${selectedCell.column}"]`;
-      const cellElement = document.querySelector(cellSelector) as HTMLElement;
-      if (cellElement && cellElement !== document.activeElement) {
-        // Add a small delay to ensure DOM is ready
-        setTimeout(() => {
-          cellElement.focus();
-        }, 0);
-              }
-    }
-  }, [selectedCell?.row, selectedCell?.column, editingCell]);
-
-  // Effect to initialize first cell selection (only once)
-  useEffect(() => {
-    if (memoizedData && memoizedData.length > 0 && !selectedCell && !loading && columnIds.length > 0) {
-      setSelectedCell({ row: 0, column: columnIds[0] });
-      setFocusedCell({ row: 0, column: columnIds[0] });
-    }
-  }, [memoizedData?.length, selectedCell, loading, columnIds[0]]);
-
-  // Effect to listen for refresh events from MasterFilter
-  useEffect(() => {
-    const handleRefreshEvent = () => {
-      console.log('🔄 Refresh event received from MasterFilter');
-      // Reset to first page and fetch fresh data
-      setPagination(prev => ({ ...prev, currentPage: 1 }));
-      if (!hasActiveFilters()) {
-        setData([]);
-        setLoading(false);
-        setFilterLoading(false);
-        setPagination(prev => ({ ...prev, totalItems: 0, totalPages: 0 }));
-      } else {
-        fetchDivisionData();
-      }
-    };
-
-    const handleDataAlterationUpdate = (event: CustomEvent) => {
-      console.log('🔄 Data alteration update event received:', event.detail);
-      // Refresh data to show updated information
-      if (hasActiveFilters()) {
-        setFilterLoading(true);
-        handlePageChange(1, true); // Refresh current page data
-      }
-    };
-
-    window.addEventListener('refreshDataTable', handleRefreshEvent);
-    window.addEventListener('dataAlterationUpdate', handleDataAlterationUpdate as EventListener);
-    
-    return () => {
-      window.removeEventListener('refreshDataTable', handleRefreshEvent);
-      window.removeEventListener('dataAlterationUpdate', handleDataAlterationUpdate as EventListener);
-    };
-  }, [fetchDivisionData, hasActiveFilters, handlePageChange]);
-
-  // Optimized keyboard handler with direct cell reference
-  const currentCellRef = useRef<{row: number, column: string} | null>(null);
-  
-  useEffect(() => {
-    currentCellRef.current = selectedCell;
-  }, [selectedCell]);
-
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-              // Handle global shortcuts that work from anywhere in the table
-        if (e.ctrlKey || e.metaKey) {
-          switch (e.key.toLowerCase()) {
-            case 'a':
-              // Ctrl+A: Select all cells
-              e.preventDefault();
-              e.stopPropagation();
-              const allCells = new Set<string>();
-              for (let row = 0; row < (memoizedData?.length || 0); row++) {
-                for (let col = 0; col < columnIds.length; col++) {
-                  allCells.add(`${row}-${columnIds[col]}`);
-                }
-              }
-              setSelectedCells(allCells);
-              return;
-              
-            case 'v':
-              // Ctrl+V: Paste into selected cell
-              e.preventDefault();
-              e.stopPropagation();
-              if (selectedCell && selectedCell.column !== 'select') {
-                navigator.clipboard.readText().then((text) => {
-                  setEditValue(text);
-                  setEditingCell({ row: selectedCell.row, column: selectedCell.column });
-                  setSelectedCell({ row: selectedCell.row, column: selectedCell.column });
-                  setFocusedCell({ row: selectedCell.row, column: selectedCell.column });
-                }).catch(err => {
-                  console.error('Failed to read clipboard:', err);
-                });
-              }
-              return;
-            
-          case 'c':
-            // Ctrl+C: Copy selected cells
-            e.preventDefault();
-            e.stopPropagation();
-            if (selectedCells.size > 0) {
-              // Group selected cells by row for proper CSV format
-              const rowsMap = new Map<number, Map<string, any>>();
-              
-              selectedCells.forEach(cellKey => {
-                const [rowIndex, columnId] = cellKey.split('-');
-                const rowIndexNum = parseInt(rowIndex);
-                if (!rowsMap.has(rowIndexNum)) {
-                  rowsMap.set(rowIndexNum, new Map());
-                }
-                if (memoizedData[rowIndexNum]) {
-                  rowsMap.get(rowIndexNum)!.set(columnId, memoizedData[rowIndexNum][columnId as keyof Voter] || '');
-                }
-              });
-              
-              // Get unique column IDs for headers
-              const allColumnIds = new Set<string>();
-              selectedCells.forEach(cellKey => {
-                const [, columnId] = cellKey.split('-');
-                allColumnIds.add(columnId);
-              });
-              const sortedColumnIds = Array.from(allColumnIds).sort((a, b) => columnIds.indexOf(a) - columnIds.indexOf(b));
-              
-              let csvData = '';
-              
-              // Add data rows ONLY (no headers)
-              const sortedRows = Array.from(rowsMap.keys()).sort((a, b) => a - b);
-              sortedRows.forEach(rowIndex => {
-                const rowData = rowsMap.get(rowIndex)!;
-                sortedColumnIds.forEach((columnId, index) => {
-                  const value = rowData.get(columnId) || '';
-                  csvData += (index > 0 ? '\t' : '') + value;
-                });
-                csvData += '\n';
-              });
-              
-              navigator.clipboard.writeText(csvData).then(() => {
-                // Trigger blinking effect instead of popup
-                triggerCopyBlinkEffect();
-              }).catch(err => {
-                console.error('Failed to copy to clipboard:', err);
-                // Trigger blinking effect for error too
-                triggerCopyBlinkEffect();
-              });
-            } else {
-              alert('❌ No cells selected. Please select cells first.');
-            }
-            return;
-        }
-      }
-      
-      // Handle Shift + Arrow keys for range selection (global)
-      if (e.shiftKey && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        const currentCell = currentCellRef.current;
-        if (currentCell && !editingCell) {
-          const now = Date.now();
-          if (now - lastShiftArrowTime < 100) {
-            e.preventDefault();
-            e.stopPropagation();
-            return;
-          }
-          setLastShiftArrowTime(now);
-          e.preventDefault();
-          e.stopPropagation();
-
-          // Build/extend rectangular selection from current/previous anchor
-          const start = selectionRange ? selectionRange.start : { row: currentCell.row, column: currentCell.column };
-          const currentEndRow = selectionRange ? selectionRange.end.row : currentCell.row;
-          const currentEndColId = selectionRange ? selectionRange.end.column : currentCell.column;
-          const currentEndColIndex = columnIds.indexOf(currentEndColId);
-          let newEndRow = currentEndRow;
-          let newEndColIndex = currentEndColIndex;
-          switch (e.key) {
-            case 'ArrowUp':
-              newEndRow = Math.max(0, currentEndRow - 1);
-              break;
-            case 'ArrowDown':
-              newEndRow = Math.min((memoizedData?.length || 1) - 1, currentEndRow + 1);
-              break;
-            case 'ArrowLeft':
-              newEndColIndex = Math.max(0, currentEndColIndex - 1);
-              break;
-            case 'ArrowRight':
-              newEndColIndex = Math.min(columnIds.length - 1, currentEndColIndex + 1);
-              break;
-          }
-          const newEndColId = columnIds[newEndColIndex];
-          if (newEndColId) {
-            const newRange = { start, end: { row: newEndRow, column: newEndColId } };
-            setSelectionRange(newRange);
-            const startRow = Math.min(newRange.start.row, newRange.end.row);
-            const endRow = Math.max(newRange.start.row, newRange.end.row);
-            const startColIndex = Math.min(columnIds.indexOf(newRange.start.column), columnIds.indexOf(newRange.end.column));
-            const endColIndex = Math.max(columnIds.indexOf(newRange.start.column), columnIds.indexOf(newRange.end.column));
-            const newSet = new Set<string>();
-            for (let r = startRow; r <= endRow; r++) {
-              for (let c = startColIndex; c <= endColIndex; c++) {
-                const cid = columnIds[c];
-                if (cid) newSet.add(`${r}-${cid}`);
-              }
-            }
-            setSelectedCells(newSet);
-          }
-          return;
-        }
-      }
-      
-      // Handle other global keys
-      const currentCell = currentCellRef.current;
-      if (!currentCell || editingCell || !tableRef.current) return;
-      
-      // Quick check if focus is in table without expensive DOM query
-      const activeElement = document.activeElement;
-      if (!activeElement || !activeElement.hasAttribute('data-cell')) return;
-      
-      // Start editing immediately on printable key (Excel-like typing to edit)
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
-        if (currentCell.column === 'verify' || currentCell.column === 'select') {
-          e.preventDefault();
-          e.stopPropagation();
-          return;
-        }
-        setEditValue(e.key);
-        setEditingCell({ row: currentCell.row, column: currentCell.column });
-        setSelectedCell({ row: currentCell.row, column: currentCell.column });
-        setFocusedCell({ row: currentCell.row, column: currentCell.column });
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-
-      // Only handle keys that aren't already handled by the cell
-      // This prevents double handling and cell skipping
-      if (['Tab'].includes(e.key)) {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const syntheticEvent = {
-          key: e.key,
-          shiftKey: e.shiftKey,
-          ctrlKey: e.ctrlKey,
-          altKey: e.altKey,
-          preventDefault: () => {},
-        } as React.KeyboardEvent;
-        
-        handleCellKeyDown(syntheticEvent, currentCell.row, currentCell.column);
-      }
-    };
-
-    document.addEventListener('keydown', handleGlobalKeyDown, { passive: false });
-    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [editingCell, handleCellKeyDown, selectionRange, columnIds, memoizedData, getSelectedCellsCount]);
-
-  // FIXED: Use stable columns and data to prevent blinking
-  const displayColumnsForTable = columns;
-  const displayDataForTable = memoizedData;
-
-  const table = useReactTable({
-    data: displayDataForTable,
-    columns: displayColumnsForTable,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
-
-  // Pre-compute the table body to ensure all hooks are called consistently
-  const tableBody = useMemo(() => {
-    // Use server-side pagination - show all data from current page
-    const displayData = memoizedData; // Don't slice - show all data from current API call
-    const displayColumns = columns;
-    const displayColumnIds = displayColumns.map(col => {
-      if (col.id) return col.id;
-      if ('accessorKey' in col) return col.accessorKey as string;
-      return 'unknown';
-    });
-    
-    console.log(`📊 Table Body: Current page ${pagination.currentPage}, showing ${displayData.length} rows`);
-    
-    // Show all rows from current page data
-    return displayData.map((rowData, index) => {
-      const absoluteRowIndex = index; // Use index from current page data
-      return (
-        <tr key={`row-${absoluteRowIndex}`} style={{ height: '28px' }}>
-          {displayColumnIds.map((columnId, cellIndex) => (
-            <td
-              key={`${absoluteRowIndex}-${columnId}`}
-              className="border-r border-gray-300 border-b border-gray-300 p-0"
-              style={{ 
-                width: (() => {
-                  const id = displayColumnIds[cellIndex];
-                  const defaultSize = displayColumns[cellIndex]?.size;
-                  return (columnSizes[id] || defaultSize);
-                })(), 
-                minWidth: (() => {
-                  const id = displayColumnIds[cellIndex];
-                  const defaultSize = displayColumns[cellIndex]?.size;
-                  return (columnSizes[id] || defaultSize);
-                })(),
-                height: '28px',
-                ...(cellIndex === 0 ? { position: 'sticky', left: 0, zIndex: 1, background: 'white' } : {})
-              }}
-            >
-              {loading ? (
-                <div className={`h-6 animate-pulse ${cellIndex === 0 ? 'bg-gray-100' : 'bg-gray-50'}`}></div>
-              ) : (
-                columnId === 'family_view' ? (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const famId = (rowData as any).family_id || (rowData as any).division_id || '';
-                        openFamilyModal(String(famId));
-                      }}
-                      className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded cursor-pointer"
-                      title="View family members"
-                    >
-                      View
-                    </button>
-                  </div>
-                ) : (
-                <ExcelCell
-                  value={
-                    columnId === 'select' 
-                      ? absoluteRowIndex + 1
-                      : rowData[columnId as keyof Voter] || ''
-                  }
-                  rowIndex={absoluteRowIndex}
-                  columnId={columnId}
-                  isSelected={selectedCell?.row === absoluteRowIndex && selectedCell?.column === columnId}
-                  isFocused={focusedCell?.row === absoluteRowIndex && focusedCell?.column === columnId}
-                  isEditing={editingCell?.row === absoluteRowIndex && editingCell?.column === columnId}
-                  isInSelectionRange={isCellInSelectionRange(absoluteRowIndex, columnId)}
-                  onCellClick={handleCellClick}
-                  onCellDoubleClick={handleCellDoubleClick}
-                  onCellKeyDown={handleCellKeyDown}
-                  onUpdate={handleUpdateData}
-                  onUpdateAndNavigate={handleUpdateAndNavigate}
-                  editValue={editValue}
-                  setEditValue={setEditValue}
-                  onStopEditing={handleStopEditing}
-                  loading={updatingCells.has(`${absoluteRowIndex}-${columnId}`)}
-                  isCopyBlinking={isCopyBlinking}
-                  displayValue={
-                    columnId === 'name'
-                      ? (
-                          <div className="grid grid-cols-3 gap-2 w-full items-center">
-                            <div className="min-w-0">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const famId = (rowData as any).family_id || (rowData as any).division_id || '';
-                                  if (famId && famId.trim() !== '') {
-                                    openFamilyModal(String(famId));
-                                  } else {
-                                    alert('Family ID not available for this person. Please contact administrator.');
-                                  }
-                                }}
-                                className={`truncate block text-left text-blue-600 hover:text-blue-800 hover:underline cursor-pointer font-medium transition-colors duration-200 flex items-center gap-1 px-1 py-0.5 rounded hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed ${
-                                  isFamilyModalOpen && familyModalFamilyId === ((rowData as any).family_id || (rowData as any).division_id || '') 
-                                    ? 'bg-blue-100 border border-blue-300' 
-                                    : ''
-                                }`}
-                                title={`Click to view family members for ${rowData.name || 'this person'}`}
-                                disabled={familyLoading}
-                                aria-label={`View family members for ${rowData.name || 'this person'}`}
-                                role="button"
-                              >
-                                <span className="text-xs">👨‍👩‍👧‍👦</span>
-                                {rowData.name || 'No Name'}
-                                {familyLoading && <span className="ml-1 text-xs">⏳</span>}
-                              </button>
-                            </div>
-                            <div className="flex items-center justify-center">
-                              <span className="text-gray-700 font-medium text-center min-w-[20px]">
-                                {rowData.gender ? (
-                                  rowData.gender.toLowerCase() === 'male' ? 'M' : 
-                                  rowData.gender.toLowerCase() === 'female' ? 'F' :
-                                  rowData.gender === 'पुरुष' ? 'M' :
-                                  rowData.gender === 'महिला' ? 'F' :
-                                  rowData.gender
-                                ) : ''}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-end">
-                              <span className="text-gray-700 font-medium text-right">{rowData.age || ''}</span>
-                            </div>
-                          </div>
-                        )
-                      : columnId === 'verify'
-                        ? (
-                            <div className="flex items-center space-x-2 truncate">
-                              <div className="flex items-center space-x-1">
-                                {String(rowData.verify || '').toLowerCase() === 'verified' ? (
-                                  <CheckCircle size={14} className="text-green-600" />
-                                ) : null}
-                                <span className="truncate">{rowData.verify || ''}</span>
-                              </div>
-                              {/* Photo indicator */}
-                              {(() => {
-                                const rid = resolveRecordId(rowData as Voter);
-                                const hasPhoto = rid ? photoAvailability[rid] : false;
-                                if (!rid) return null;
-                                return (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const url = `http://localhost:5002/api/photos/${encodeURIComponent(rid)}.jpg`;
-                                      window.open(url, '_blank');
-                                    }}
-                                    onMouseEnter={() => {
-                                      if (!photoAvailability.hasOwnProperty(rid)) checkAndCachePhoto(rid);
-                                    }}
-                                    className={`p-1 rounded hover:bg-gray-100 cursor-pointer ${hasPhoto ? '' : 'opacity-40 cursor-not-allowed'}`}
-                                    title={hasPhoto ? 'Open photo' : 'Photo not available'}
-                                    disabled={!hasPhoto}
-                                  >
-                                    <ImageIcon size={16} className={hasPhoto ? 'text-blue-600' : 'text-gray-400'} />
-                                  </button>
-                                );
-                              })()}
-                            </div>
-                          )
-                      : undefined
-                  }
-                />
-                )
-              )}
-            </td>
-          ))}
-        </tr>
-      );
-    });
-  }, [memoizedData, loading, columns, selectedCell?.row, selectedCell?.column, focusedCell?.row, focusedCell?.column, editingCell?.row, editingCell?.column, editValue, columnIds, isCellInSelectionRange, handleCellClick, handleCellDoubleClick, handleCellKeyDown, handleUpdateData, handleUpdateAndNavigate, setEditValue, handleStopEditing, pagination.currentPage, pagination.itemsPerPage, columnSizes, isCopyBlinking, openFamilyModal]);
-
-  // Function to trigger copy blink effect (Excel-like behavior)
-  const triggerCopyBlinkEffect = () => {
-    setIsCopyBlinking(true);
-    setTimeout(() => {
-      setIsCopyBlinking(false);
-    }, 300); // Blink for 300ms
-  };
-
-  // Helper removed (hoisted function is used instead)
 
   // Function to refresh data with current filters
   const refreshDataWithFilters = () => {
     console.log('🔄 Manually refreshing data with current filters');
-    // Do not fetch if no filters are selected
-    if (!hasActiveFilters()) {
-      setData([]);
-      setLoading(false);
-      setFilterLoading(false);
-      setPagination(prev => ({
-        ...prev,
-        currentPage: 1,
-        totalItems: 0,
-        totalPages: 0
-      }));
-      return;
-    }
-    handlePageChange(1, true); // Go to first page and refetch as filter-driven
-  };
-
-  // Function to refresh data
-  const fetchDataAgain = () => {
-    // Guard: never fetch unfiltered data
-    if (!hasActiveFilters()) {
-      setData([]);
-      setLoading(false);
-      setFilterLoading(false);
-      setPagination(prev => ({
-        ...prev,
-        totalItems: 0,
-        totalPages: 0
-      }));
-      return;
-    }
-    const page = pagination.currentPage;
-    const limit = pagination.itemsPerPage;
-    
-    // Build API URL with filters
-    let apiUrl = `http://localhost:5002/api/area_mapping?page=${page}&limit=${limit}`;
-    
-    // Add master filters to API call
-    if (memoizedMasterFilters) {
-      if (memoizedMasterFilters.parliament) {
-        apiUrl += `&parliament=${encodeURIComponent(memoizedMasterFilters.parliament)}`;
-      }
-      if (memoizedMasterFilters.assembly) {
-        apiUrl += `&assembly=${encodeURIComponent(memoizedMasterFilters.assembly)}`;
-      }
-      if (memoizedMasterFilters.district) {
-        apiUrl += `&district=${encodeURIComponent(memoizedMasterFilters.district)}`;
-      }
-      if (memoizedMasterFilters.block) {
-        apiUrl += `&block=${encodeURIComponent(memoizedMasterFilters.block)}`;
-      }
-    }
-    
-    // Add detailed filters to API call (with DOB formatting)
-    if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
-      Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
-        if (value && value !== '') {
-          const val = key === 'dateOfBirth' ? formatDateForBackend(String(value)) : String(value);
-          apiUrl += `&${key}=${encodeURIComponent(val)}`;
-        }
-      });
-    }
-    
-    console.log('🔍 Refreshing data with filters:', { apiUrl });
-    
-    fetch(apiUrl)
-      .then(res => res.json())
-      .then(async (apiData: any[]) => {
-        let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
-          id: String(item.id ?? index + 1),
-          division_id: String(item.temp_family_Id || item.temp_family_id || ''),
-          family_id: item.family_id || '',
-          cast_name: item.caste || '',
-          name: item.name || '',
-          fname: item.father_name || '',
-          mname: item.mother_name || '',
-          surname: (() => {
-            const name = item.name || '';
-            const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
-            return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
-          })(),
-          mobile1: item.mobile_number ? String(item.mobile_number) : '',
-          mobile2: '',
-          age: calculateAge(item.date_of_birth),
-          date_of_birth: item.date_of_birth || '',
-          parliament: item.parliament || '', // ✅ FIXED: Read from database
-          assembly: item.assembly || '',     // ✅ FIXED: Read from database
-          district: item.district || '',
-          block: item.block || '',
-          tehsil: item.gp || '',
-          village: item.village || '',
-          gender: item.gender || '',
-          address: item.address || '',
-          verify: item.verify || '',
-          family_view: item.family_view || '',
-          caste_category: item.caste_category || '',
-          religion: item.religion || item.minority_religion || '',
-          cast_id: item.caste || '',
-          cast_ida: item.caste_category || ''
-        }));
-        try {
-          const pairs = Array.from(new Set(mappedData.map(r => JSON.stringify({ district: r.district, block: r.block })))).map(s => JSON.parse(s));
-          if (pairs.length > 0) {
-            const resMap = await fetch('http://localhost:5002/api/resolve-ac-codes', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pairs })
-            });
-            if (resMap.ok) {
-              const mapping = await resMap.json();
-              const norm = (v: any) => String(v ?? '').trim().toUpperCase();
-              mappedData = mappedData.map(row => {
-                const key = norm(row.district) + '|' + norm(row.block);
-                const acCode = mapping[key];
-                return acCode ? { ...row, assembly: String(acCode) } : row;
-              });
-            }
-          }
-        } catch {}
-        setData(mappedData);
-      })
-      .catch(error => {
-        console.error('Error fetching data:', error);
-      });
+    fetchData();
   };
 
   // Handle edit function
@@ -2750,7 +529,7 @@ function DataTable({
     if (fieldName === 'surname') {
       backendColumnName = 'name';
       // Get current name and replace last word with new surname
-      const currentVoter = memoizedData.find(v => v.id === String(rowId));
+      const currentVoter = data.find(v => v.id === String(rowId));
       if (currentVoter && currentVoter.name) {
         const nameParts = currentVoter.name.split(' ').filter((part: string) => part.trim() !== '');
         if (nameParts.length > 1) {
@@ -2781,7 +560,7 @@ function DataTable({
       return res.json();
     })
     .then(() => {
-              // Update local state immediately for immediate UI update
+      // Update local state immediately for immediate UI update
       setData(prevData => {
         const newData = prevData.map((item, index) => {
           if (item.id === String(rowId)) {
@@ -2802,8 +581,6 @@ function DataTable({
         });
         return newData;
       });
-      
-      // fetchDataAgain(); // Commented out since we're updating locally
     })
     .catch(error => {
       console.error('Error updating data:', error);
@@ -2812,7 +589,7 @@ function DataTable({
   };
 
   // Handle error and loading states after all hooks are called
-  if (loading && !memoizedData.length) {
+  if (loading && !data.length) {
     return (
       <div className="bg-white rounded-lg shadow-lg p-8">
         <div className="text-center">
@@ -2825,7 +602,7 @@ function DataTable({
   }
 
   // Show message when no filters are selected
-  if (!memoizedData.length && !loading && !error) {
+  if (!data.length && !loading && !error) {
     const hasMasterFilters = memoizedMasterFilters && Object.values(memoizedMasterFilters).some(val => val && val !== '');
     const hasDetailedFilters = memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0 && Object.values(memoizedDetailedFilters).some(val => val && val !== '');
     
@@ -2845,43 +622,11 @@ function DataTable({
               onClick={() => {
                 setError(null);
                 setLoading(true);
-                fetchDivisionData();
+                fetchData();
               }}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors mr-2"
             >
               Retry
-            </button>
-            <button
-                            onClick={() => {
-                fetch('http://localhost:5002/api/health')
-                  .then(res => res.json())
-                  .then(data => {
-                    alert('Health check successful! Check console for details.');
-                  })
-                  .catch(err => {
-                    console.error('❌ Health check failed:', err);
-                    alert('Health check failed! Check console for details.');
-                  });
-              }}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-            >
-              Test API Connection
-            </button>
-            <button
-                            onClick={() => {
-                fetch('http://localhost:5002/api/area_mapping/debug')
-                  .then(res => res.json())
-                  .then(data => {
-                    alert('Debug endpoint successful! Check console for details.');
-                  })
-                  .catch(err => {
-                    console.error('❌ Debug endpoint failed:', err);
-                    alert('Debug endpoint failed! Check console for details.');
-                  });
-              }}
-              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
-            >
-              Test Area Mapping API
             </button>
           </div>
         </div>
@@ -2954,79 +699,92 @@ function DataTable({
           </div>
         </div>
       )}
-      {/* Excel-like DataGrid */}
-      <div className="h-full w-full overflow-auto pb-10" ref={tableRef}>
-        <table className="border-collapse w-full" style={{ borderSpacing: 0, tableLayout: 'fixed' }}>
-          {/* Excel-like Header */}
-          <thead>
-            <tr>
-              {table.getHeaderGroups()[0]?.headers.map((header) => (
-                <th
-                  key={header.id}
-                  className="bg-gray-100 border-r border-gray-300 border-b border-gray-300 px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wide select-none hover:bg-gray-200 relative"
-                  style={{ 
-                    width: (() => {
-                      const colId = header.column.id as string;
-                      return columnSizes[colId] || header.getSize();
-                    })(),
-                    minWidth: (() => {
-                      const colId = header.column.id as string;
-                      return columnSizes[colId] || header.getSize();
-                    })(),
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 10,
-                    ...(header.column.id === 'select' ? { left: 0, zIndex: 20 } : {})
-                  }}
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(
-                        header.column.columnDef.header,
-                        header.getContext()
-                      )}
-                  {/* Column resizer */}
-                  <div
-                    onMouseDown={(e) => startColumnResize(e, header.column.id as string)}
-                    style={{
-                      position: 'absolute',
-                      right: 0,
-                      top: 0,
-                      width: '6px',
-                      height: '100%',
-                      cursor: 'col-resize'
-                    }}
-                  />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          
-          {/* Excel-like Body */}
-          <tbody>
-            {tableBody}
-          </tbody>
-        </table>
-      </div>
 
-      {/* Grid Footer - Pagination */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200">
-        <CommonPagination
-          currentPage={pagination.currentPage}
-          totalPages={pagination.totalPages}
-          totalItems={pagination.totalItems}
-          itemsPerPage={pagination.itemsPerPage}
-          onPageChange={handlePageChange}
-          onItemsPerPageChange={handleItemsPerPageChange}
-          loading={loading}
-          showRefreshButton={true}
-          onRefresh={refreshDataWithFilters}
-          showFiltersInfo={true}
-          masterFilters={memoizedMasterFilters}
-          detailedFilters={memoizedDetailedFilters}
-          filterLoading={filterLoading}
-        />
-      </div>
+      {/* ExcelDataTable Component */}
+      <ExcelDataTable
+        data={data}
+        columns={columns}
+        loading={loading}
+        onUpdateRow={async (rowIndex: number, columnId: string, value: any) => {
+          // Handle row updates
+          const voter = data[rowIndex];
+          if (voter) {
+            const recordId = (voter.row_pk != null ? String(voter.row_pk) : (voter.division_id || '')).trim();
+            if (recordId) {
+              // Map frontend column IDs to backend column names
+              const columnMapping: { [key: string]: string } = {
+                'name': 'name',
+                'fname': 'father_name',
+                'mname': 'mother_name',
+                'mobile1': 'mobile_number',
+                'mobile2': 'mobile_number',
+                'district': 'district',
+                'block': 'block',
+                'tehsil': 'gp',
+                'village': 'village',
+                'gender': 'gender',
+                'address': 'address',
+                'verify': 'verify',
+                'religion': 'minority_religion',
+                'cast_id': 'caste',
+                'cast_ida': 'caste_category'
+              };
+              
+              const backendColumnName = columnMapping[columnId] || columnId;
+              
+              try {
+                const response = await fetch(`http://localhost:5002/api/area_mapping/${recordId}`, {
+                  method: 'PUT',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    columnName: backendColumnName,
+                    value: value
+                  }),
+                });
+                
+                if (!response.ok) {
+                  throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                // Update local state
+                setData(prevData => {
+                  const newData = [...prevData];
+                  newData[rowIndex] = { ...newData[rowIndex], [columnId]: value };
+                  return newData;
+                });
+              } catch (error) {
+                console.error('Error updating data:', error);
+                throw error;
+              }
+            }
+          }
+        }}
+        pagination={pagination}
+        onPageChange={(page: number) => {
+          setPagination(prev => ({ ...prev, currentPage: page }));
+          // Fetch data for new page
+          fetchData();
+        }}
+        onItemsPerPageChange={(itemsPerPage: number) => {
+          setPagination(prev => ({ ...prev, itemsPerPage, currentPage: 1 }));
+          // Fetch data with new page size
+          fetchData();
+        }}
+        showPagination={true}
+        enableExcelFeatures={true}
+        showRefreshButton={true}
+        onRefresh={refreshDataWithFilters}
+        showFiltersInfo={true}
+        masterFilters={memoizedMasterFilters}
+        detailedFilters={memoizedDetailedFilters}
+        filterLoading={filterLoading}
+        tableHeight="h-screen"
+        rowHeight={28}
+        enableColumnResize={true}
+        enableRowResize={true}
+      />
     </div>
   );
 }
