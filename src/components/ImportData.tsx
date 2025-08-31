@@ -12,6 +12,12 @@ interface ImportDataProps {
     district?: string;
     block?: string;
   };
+  onDataImported?: (data: {
+    sessionId: string;
+    tempTableName: string;
+    importedRows: number;
+    fileName: string;
+  }) => void; // Callback for imported data
 }
 
 interface ImportResult {
@@ -20,6 +26,8 @@ interface ImportResult {
   importedRows?: number;
   errors?: string[];
   fileName?: string;
+  sessionId?: string;
+  tempTableName?: string;
 }
 
 export default function ImportData({ masterFilters = {} }: ImportDataProps) {
@@ -198,6 +206,17 @@ export default function ImportData({ masterFilters = {} }: ImportDataProps) {
       if (result.success) {
         setImportResult(result);
         completeProcessing(true, `Import completed successfully! ${result.importedRows || 0} rows imported.`);
+        
+        // Pass imported data to parent component if callback exists
+        if (onDataImported && result.sessionId) {
+          // Pass the session ID and actual imported data info
+          onDataImported({
+            sessionId: result.sessionId,
+            tempTableName: result.tempTableName,
+            importedRows: result.importedRows,
+            fileName: result.fileName
+          });
+        }
         
         // Log activity
         await logActivity({

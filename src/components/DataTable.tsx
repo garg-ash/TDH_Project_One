@@ -50,27 +50,61 @@ interface Voter {
   religion: string;
   cast_id: string;
   cast_ida: string;
+  name_gender_age_display?: { name: string; gender: string; age: string }; // Combined display field
 }
 
 // ExcelDataTable will handle all Excel functionality
 
 const columns = [
   {
-    id: 'select',
-    header: 'Sr. No.',
-    size: 80,
-    isRowHeader: true
-  },
-  {
-    accessorKey: 'division_id',
+    accessorKey: 'family_id',
     header: 'Family ID',
-    size: 120,
+    size: 180,
   },
-  {
-    accessorKey: 'name',
-    header: 'Name | M/F | Age',
-    size: 280,
-  },
+     {
+     id: 'name_gender_age_display',
+     header: 'Name | M/F | Age',
+     size: 280,
+     cell: ({ row }: any) => {
+       const voter = row.original;
+       const displayData = voter.name_gender_age_display;
+       
+       if (!displayData) return <span className="text-gray-400">No data</span>;
+       
+       return (
+         <div className="flex items-center justify-between w-full h-full px-2">
+           {/* Name - Left aligned, takes most space with click functionality */}
+           <div className="flex-1 text-left pr-2">
+             <span 
+               className="font-medium text-gray-900 cursor-pointer hover:text-blue-600 hover:underline"
+               onClick={() => {
+                 if (voter.family_id) {
+                   // We'll handle this through a custom event since we can't access openFamilyModal directly
+                   const event = new CustomEvent('openFamilyModal', { 
+                     detail: { familyId: voter.family_id } 
+                   });
+                   window.dispatchEvent(event);
+                 }
+               }}
+               title="Click to view family members"
+             >
+               {displayData.name || ''}
+             </span>
+           </div>
+           
+           {/* Gender - Right aligned, no background */}
+           <div className="text-right pr-2">
+             <span className="text-sm text-gray-600">{displayData.gender || ''}</span>
+           </div>
+           
+           {/* Age - Right aligned */}
+           <div className="text-right">
+             <span className="text-sm text-gray-600 font-mono">{displayData.age || ''}</span>
+           </div>
+         </div>
+       );
+     }
+   },
   {
     accessorKey: 'surname',
     header: 'Surname',
@@ -114,7 +148,11 @@ const columns = [
   {
     accessorKey: 'address',
     header: 'Address',
-    size: 200,
+    size: 300,
+    cell: ({ row }: any) => {
+      const voter = row.original;
+      return <div className="text-sm text-gray-600">{voter.address || ''}</div>;
+    }
   },
   {
     accessorKey: 'verify',
@@ -244,8 +282,8 @@ function DataTable({
     try {
       setLoading(true);
       setError(null);
-      
-      // Check if any filters are active
+
+      // Do not fetch until user selects at least one filter
       if (!hasActiveFilters()) {
         setData([]);
         setPagination(prev => ({ ...prev, totalItems: 0, totalPages: 0 }));
@@ -275,12 +313,25 @@ function DataTable({
         }
       }
       
-      // Add detailed filters to API call
+      // Add detailed filters to API call (map UI keys to backend keys)
       if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
+        const keyMap: Record<string, string> = {
+          tehsil: 'gp',
+          mobile1: 'mobile_number',
+          mobile2: 'mobile_number',
+          castId: 'caste',
+          castIda: 'caste_category',
+          malefemale: 'gender',
+          religion: 'minority_religion',
+          dateOfBirth: 'date_of_birth',
+          fname: 'father_name',
+          mname: 'mother_name'
+        };
         Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
-          if (value && value !== '') {
+          if (value !== undefined && value !== '') {
+            const backendKey = keyMap[key] || key;
             const val = key === 'dateOfBirth' ? formatDateForBackend(String(value)) : String(value);
-            apiUrl += `&${key}=${encodeURIComponent(val)}`;
+            apiUrl += `&${backendKey}=${encodeURIComponent(val)}`;
           }
         });
       }
@@ -298,87 +349,218 @@ function DataTable({
       const rawData = await response.text();
       
       try {
-        const apiData = JSON.parse(rawData);
+        const parsed = JSON.parse(rawData);
+        // Support both array and { data: [] } shapes
+        const apiData: any[] = Array.isArray(parsed)
+          ? parsed
+          : (Array.isArray((parsed as any)?.data) ? (parsed as any).data : []);
         
         if (!Array.isArray(apiData)) {
-          console.error('❌ API data is not an array:', apiData);
-          throw new Error('API data is not an array');
+          console.error('❌ API data is not an array-like:', parsed);
+          throw new Error('API did not return a list');
         }
         
-        // Map API data to Voter interface
-        let mappedData: Voter[] = apiData.map((item: any, index: number) => ({
-          id: String(item.id ?? index + 1),
-          row_pk: typeof item.id === 'number' ? item.id : undefined,
-          division_id: String(item.temp_family_Id || item.temp_family_id || ''),
-          family_id: item.family_id || '',
-          cast_name: item.caste || '',
-          name: item.name || '',
-          fname: item.father_name || '',
-          mname: item.mother_name || '',
-          surname: (() => {
-            const name = item.name || '';
-            const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
-            return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
-          })(),
-          mobile1: item.mobile_number ? String(item.mobile_number) : '',
-          mobile2: '',
-          age: calculateAge(item.date_of_birth),
-          date_of_birth: item.date_of_birth || '',
-          parliament: item.parliament || '',
-          assembly: item.assembly || '',
-          district: item.district || '',
-          block: item.block || '',
-          tehsil: item.gp || '',
-          village: item.village || '',
-          gender: item.gender || '',
-          address: item.address || '',
-          verify: item.verify || '',
-          family_view: item.family_view || '',
-          caste_category: item.caste_category || '',
-          religion: item.religion || item.minority_religion || '',
-          cast_id: item.caste || '',
-          cast_ida: item.caste_category || ''
-        }));
-        
-        setData(mappedData);
-        
-        // Update pagination info
-        let totalCount: number | string = mappedData.length;
-        let totalPages = 1;
-        
-        // If we got exactly the limit, there might be more data
-        if (mappedData.length === limit) {
-          // Try to fetch one more record to see if there's more data
-          try {
-            const nextPageResponse = await fetch(`${apiUrl}&page=${page + 1}&limit=1`);
-            if (nextPageResponse.ok) {
-              const nextPageData = await nextPageResponse.json();
-              if (Array.isArray(nextPageData) && nextPageData.length > 0) {
-                // There's more data, estimate total
-                totalCount = '10000+'; // Show approximate total
-                totalPages = Math.ceil(10000 / limit);
-              } else {
-                // No more data, this is the last page
-                totalCount = (page - 1) * limit + mappedData.length;
-                totalPages = page;
-              }
-            }
-          } catch (error) {
-            // If we can't check next page, assume there's more data
-            totalCount = '10000+';
-            totalPages = Math.ceil(10000 / limit);
-          }
-        } else {
-          // We got less than the limit, so this is the last page
-          totalCount = (page - 1) * limit + mappedData.length;
-          totalPages = page;
-        }
-        
-        setPagination(prev => ({
-          ...prev,
-          totalItems: totalCount,
-          totalPages: totalPages
-        }));
+                 // Map API data to Voter interface
+         const pageOffsetBase = (page - 1) * limit;
+         let mappedData: Voter[] = apiData.map((item: any, index: number) => {
+           const name = item.name || '';
+           const gender = item.gender || '';
+           const age = calculateAge(item.date_of_birth);
+           
+           // Format gender display
+           let genderDisplay = '';
+           if (gender) {
+             if (gender.toLowerCase() === 'male' || gender === 'पुरुष') {
+               genderDisplay = 'M';
+             } else if (gender.toLowerCase() === 'female' || gender === 'महिला') {
+               genderDisplay = 'F';
+             } else {
+               genderDisplay = gender;
+             }
+           }
+           
+                       // Create combined display text with proper formatting
+            const nameGenderAgeDisplay = {
+              name: name,
+              gender: genderDisplay,
+              age: age
+            };
+           
+           return {
+             id: String(item.id ?? index + 1),
+             row_pk: typeof item.id === 'number' ? item.id : undefined,
+             __pageOffset: pageOffsetBase,
+             __rowIndex: index,
+             division_id: String(item.temp_family_Id || item.temp_family_id || ''),
+             family_id: item.family_id || '',
+             cast_name: item.caste || '',
+             name: item.name || '',
+             fname: item.father_name || '',
+             mname: item.mother_name || '',
+             surname: (() => {
+               const name = item.name || '';
+               const nameParts = name.split(' ').filter((part: string) => part.trim() !== '');
+               return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+             })(),
+             mobile1: item.mobile_number ? String(item.mobile_number) : '',
+             mobile2: '',
+             age: age,
+             date_of_birth: item.date_of_birth || '',
+             parliament: item.parliament || '',
+             assembly: item.assembly || '',
+             district: item.district || '',
+             block: item.block || '',
+             tehsil: item.gp || '',
+             village: item.village || '',
+             gender: item.gender || '',
+             address: item.address || '',
+             verify: item.verify || '',
+             family_view: item.family_view || '',
+             caste_category: item.caste_category || '',
+             religion: item.religion || item.minority_religion || '',
+             cast_id: item.caste || '',
+             cast_ida: item.caste_category || '',
+             // Add the combined display field
+             name_gender_age_display: nameGenderAgeDisplay
+           };
+         });
+         
+         // First, get the exact total count of filtered data (not approximate)
+         let exactTotalCount = 0;
+         try {
+
+           // Build count URL with same filters but no pagination
+           let countUrl = `http://localhost:5002/api/area_mapping?page=1&limit=10000`;
+           
+           // Add master filters to count API call
+           if (memoizedMasterFilters) {
+             if (memoizedMasterFilters.parliament) {
+               countUrl += `&parliament=${encodeURIComponent(memoizedMasterFilters.parliament)}`;
+             }
+             if (memoizedMasterFilters.assembly) {
+               countUrl += `&assembly=${encodeURIComponent(memoizedMasterFilters.assembly)}`;
+             }
+             if (memoizedMasterFilters.district) {
+               countUrl += `&district=${encodeURIComponent(memoizedMasterFilters.district)}`;
+             }
+             if (memoizedMasterFilters.block) {
+               countUrl += `&block=${encodeURIComponent(memoizedMasterFilters.block)}`;
+             }
+           }
+           
+           // Add detailed filters to count API call
+           if (memoizedDetailedFilters && Object.keys(memoizedDetailedFilters).length > 0) {
+             const keyMap: Record<string, string> = {
+               tehsil: 'gp',
+               mobile1: 'mobile_number',
+               mobile2: 'mobile_number',
+               castId: 'caste',
+               castIda: 'caste_category',
+               malefemale: 'gender',
+               religion: 'minority_religion',
+               dateOfBirth: 'date_of_birth',
+               fname: 'father_name',
+               mname: 'mother_name'
+             };
+             Object.entries(memoizedDetailedFilters).forEach(([key, value]) => {
+               if (value !== undefined && value !== '') {
+                 const backendKey = keyMap[key] || key;
+                 const val = key === 'dateOfBirth' ? formatDateForBackend(String(value)) : String(value);
+                 countUrl += `&${backendKey}=${encodeURIComponent(val)}`;
+               }
+             });
+           }
+           
+           // Add cache-busting parameter to ensure fresh data
+           countUrl += `&_t=${Date.now()}`;
+           console.log('🔍 Fetching exact count from:', countUrl);
+           
+           const countResponse = await fetch(countUrl, {
+             method: 'GET',
+             headers: {
+               'Cache-Control': 'no-cache',
+               'Pragma': 'no-cache'
+             }
+           });
+           
+           if (countResponse.ok) {
+             const countData = await countResponse.json();
+             if (Array.isArray(countData)) {
+               // Get exact count of all filtered data
+               exactTotalCount = countData.length;
+               console.log('✅ Exact total count:', exactTotalCount);
+             }
+           } else {
+             console.warn('❌ Count API failed:', countResponse.status, countResponse.statusText);
+           }
+         } catch (error) {
+           console.warn('❌ Could not get exact count, will use approximate:', error);
+         }
+         
+         // Use exact count if available, otherwise fall back to pagination logic
+         if (exactTotalCount > 0) {
+           // We have the exact count, use it for proper pagination (like SurnameDataTable)
+           setData(mappedData);
+           setPagination(prev => ({
+             ...prev,
+             totalItems: exactTotalCount,
+             totalPages: Math.max(1, Math.ceil(exactTotalCount / limit))
+           }));
+         } else {
+           // Fallback to original pagination logic if exact count failed
+           if (mappedData.length <= limit) {
+             setData(mappedData);
+             
+             // Update pagination info
+             let totalCount: number | string = mappedData.length;
+             let totalPages = 1;
+             
+             // If we got exactly the limit, there might be more data
+             if (mappedData.length === limit) {
+               // Try to fetch one more record to see if there's more data
+               try {
+                 const nextPageResponse = await fetch(`${apiUrl}&page=${page + 1}&limit=1`);
+                 if (nextPageResponse.ok) {
+                   const nextPageData = await nextPageResponse.json();
+                   if (Array.isArray(nextPageData) && nextPageData.length > 0) {
+                     // There's at least one more page. Do not inflate totals; just expose next page.
+                     totalCount = `${(page + 1) * limit}+`;
+                     totalPages = page + 1;
+                   } else {
+                     // No more data, this is the last page
+                     totalCount = (page - 1) * limit + mappedData.length;
+                     totalPages = page;
+                   }
+                 }
+               } catch (error) {
+                 // If we can't check next page, do not guess wildly; keep current page as last known
+                 totalCount = `${page * limit}+`;
+                 totalPages = page;
+               }
+             } else {
+               // We got less than the limit, so this is the last page
+               totalCount = (page - 1) * limit + mappedData.length;
+               totalPages = page;
+             }
+             
+             setPagination(prev => ({
+               ...prev,
+               totalItems: totalCount,
+               totalPages: totalPages
+             }));
+           } else {
+             // Backend returned all filtered rows ignoring limit; paginate on client
+             const total = mappedData.length;
+             const start = (page - 1) * limit;
+             const end = start + limit;
+             setData(mappedData.slice(start, end));
+             setPagination(prev => ({
+               ...prev,
+               totalItems: total,
+               totalPages: Math.max(1, Math.ceil(total / limit))
+             }));
+           }
+         }
         
       } catch (parseError) {
         console.error('❌ JSON parsing error:', parseError);
@@ -396,31 +578,76 @@ function DataTable({
     }
   }, [pagination.currentPage, pagination.itemsPerPage, memoizedMasterFilters, memoizedDetailedFilters]);
 
+  // Calculate rows per page based on screen height
+  const calculateRowsPerPage = () => {
+    const screenHeight = window.innerHeight;
+    const headerHeight = 200; // Approximate height for headers, filters, etc.
+    const rowHeight = 28; // Height of each row
+    const paginationHeight = 80; // Height for pagination controls
+    const availableHeight = screenHeight - headerHeight - paginationHeight;
+    const calculatedRows = Math.floor(availableHeight / rowHeight);
+    
+    // Ensure minimum and maximum rows
+    const minRows = 10;
+    const maxRows = 200;
+    return Math.max(minRows, Math.min(maxRows, calculatedRows));
+  };
+
+  // Effect to recalculate rows per page when screen size changes
+  useEffect(() => {
+    const handleResize = () => {
+      const newRowsPerPage = calculateRowsPerPage();
+      if (newRowsPerPage !== pagination.itemsPerPage) {
+        setPagination(prev => ({
+          ...prev,
+          itemsPerPage: newRowsPerPage,
+          currentPage: 1 // Reset to first page when changing page size
+        }));
+      }
+    };
+
+    // Initial calculation
+    handleResize();
+
+    // Listen for window resize
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [pagination.itemsPerPage]);
+
   // Effect to fetch data on component mount and filter changes
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Effect to listen for refresh events
+     // Effect to listen for refresh events
+   useEffect(() => {
+     const handleRefreshEvent = () => {
+       console.log('🔄 Refresh event received');
+       // Reset to first page on refresh so new results start from page 1
+       setPagination(prev => ({ ...prev, currentPage: 1 }));
+     };
+
+     const handleDataAlterationUpdate = (event: CustomEvent) => {
+       console.log('🔄 Data alteration update event received:', event.detail);
+       fetchData();
+     };
+
+     window.addEventListener('refreshDataTable', handleRefreshEvent);
+     window.addEventListener('dataAlterationUpdate', handleDataAlterationUpdate as EventListener);
+     
+     return () => {
+       window.removeEventListener('refreshDataTable', handleRefreshEvent);
+       window.removeEventListener('dataAlterationUpdate', handleDataAlterationUpdate as EventListener);
+     };
+   }, [fetchData]);
+
+  // Reset to first page whenever filters change (master or detailed)
   useEffect(() => {
-    const handleRefreshEvent = () => {
-      console.log('🔄 Refresh event received');
-      fetchData();
-    };
-
-    const handleDataAlterationUpdate = (event: CustomEvent) => {
-      console.log('🔄 Data alteration update event received:', event.detail);
-      fetchData();
-    };
-
-    window.addEventListener('refreshDataTable', handleRefreshEvent);
-    window.addEventListener('dataAlterationUpdate', handleDataAlterationUpdate as EventListener);
-    
-    return () => {
-      window.removeEventListener('refreshDataTable', handleRefreshEvent);
-      window.removeEventListener('dataAlterationUpdate', handleDataAlterationUpdate as EventListener);
-    };
-  }, [fetchData]);
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+  }, [stableStringify(memoizedMasterFilters || {}), stableStringify(memoizedDetailedFilters || {})]);
 
   const openFamilyModal = useCallback(async (familyId: string) => {
     if (!familyId) {
@@ -485,13 +712,45 @@ function DataTable({
     }
   }, []);
 
-  const closeFamilyModal = useCallback(() => {
-    setIsFamilyModalOpen(false);
-    setFamilyModalFamilyId('');
-    setFamilyMembers([]);
-    setFamilyError(null);
-    setFamilyLoading(false);
-  }, []);
+     const closeFamilyModal = useCallback(() => {
+     setIsFamilyModalOpen(false);
+     setFamilyModalFamilyId('');
+     setFamilyMembers([]);
+     setFamilyError(null);
+     setFamilyLoading(false);
+   }, []);
+
+       // Effect to listen for family modal events
+    useEffect(() => {
+      const handleOpenFamilyModal = (event: CustomEvent) => {
+        console.log('👨‍👩‍👧‍👦 Opening family modal for family ID:', event.detail.familyId);
+        openFamilyModal(event.detail.familyId);
+      };
+
+      window.addEventListener('openFamilyModal', handleOpenFamilyModal as EventListener);
+      
+      return () => {
+        window.removeEventListener('openFamilyModal', handleOpenFamilyModal as EventListener);
+      };
+    }, [openFamilyModal]);
+
+    // Effect to handle ESC key for closing family modal
+    useEffect(() => {
+      const handleEscKey = (event: KeyboardEvent) => {
+        if (event.key === 'Escape' && isFamilyModalOpen) {
+          console.log('⌨️ ESC key pressed, closing family modal');
+          closeFamilyModal();
+        }
+      };
+
+      if (isFamilyModalOpen) {
+        document.addEventListener('keydown', handleEscKey);
+        
+        return () => {
+          document.removeEventListener('keydown', handleEscKey);
+        };
+      }
+    }, [isFamilyModalOpen, closeFamilyModal]);
 
   // Function to refresh data with current filters
   const refreshDataWithFilters = () => {
@@ -635,7 +894,7 @@ function DataTable({
   }
 
   return (
-    <div className="bg-white h-screen w-full overflow-hidden relative" style={{ border: '1px solid #d1d5db' }}>
+    <div className="bg-white h-screen w-full overflow-auto relative" style={{ border: '1px solid #d1d5db' }}>
       {/* Family Members Modal */}
       {isFamilyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-transparent backdrop-blur-[1px] backdrop-brightness-90">
@@ -700,7 +959,7 @@ function DataTable({
         </div>
       )}
 
-      {/* ExcelDataTable Component */}
+      {/* ExcelDataTable Component with Latest Features */}
       <ExcelDataTable
         data={data}
         columns={columns}
@@ -780,7 +1039,7 @@ function DataTable({
         masterFilters={memoizedMasterFilters}
         detailedFilters={memoizedDetailedFilters}
         filterLoading={filterLoading}
-        tableHeight="h-screen"
+        tableHeight="h-[calc(100vh-400px)]"
         rowHeight={28}
         enableColumnResize={true}
         enableRowResize={true}

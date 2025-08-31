@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { RefreshCw } from 'lucide-react';
 
 interface PaginationProps {
   currentPage: number;
@@ -34,6 +35,26 @@ export default function CommonPagination({
   filterLoading = false
 }: PaginationProps) {
   const [goToPageInput, setGoToPageInput] = useState<string>(currentPage.toString());
+  
+  // Compute total pages dynamically from totalItems when available (supports numeric strings)
+  const numericTotalItems = typeof totalItems === 'number'
+    ? totalItems
+    : (() => {
+        if (typeof totalItems === 'string') {
+          // Only accept pure digit strings; ignore approximate strings like "10000+"
+          const isPureDigits = /^\d+$/.test(totalItems);
+          return isPureDigits ? parseInt(totalItems, 10) : undefined;
+        }
+        return undefined;
+      })();
+  const computedTotalPages = typeof numericTotalItems === 'number'
+    ? Math.max(1, Math.ceil(numericTotalItems / itemsPerPage))
+    : totalPages;
+
+  // Display at least 5 pages when total is unknown/approximate
+  const displayTotalPages = typeof numericTotalItems === 'number'
+    ? computedTotalPages
+    : Math.max(computedTotalPages, 5);
 
   // Update input when current page changes
   useEffect(() => {
@@ -42,7 +63,8 @@ export default function CommonPagination({
 
   const handleGoToPage = () => {
     const page = parseInt(goToPageInput);
-    if (page >= 1 && page <= totalPages) {
+    const maxPage = displayTotalPages;
+    if (page >= 1 && page <= maxPage) {
       onPageChange(page);
       setGoToPageInput(page.toString());
     } else {
@@ -60,9 +82,19 @@ export default function CommonPagination({
     handleGoToPage();
   };
 
+  const handleItemsPerPageSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newVal = parseInt(e.target.value, 10);
+    if (!Number.isNaN(newVal)) {
+      onItemsPerPageChange(newVal);
+      if (currentPage !== 1) {
+        setGoToPageInput('1');
+      }
+    }
+  };
+
   return (
-    <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-      <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-gray-700 space-y-2 sm:space-y-0 mr-10">
+    <div className="bg-gray-50 px-4 py-2 border-t border-gray-200 relative z-50">
+      <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-gray-700 space-y-1 sm:space-y-0 mr-10">
         <div className="text-center sm:text-left">
           {loading ? (
             <div className="flex items-center">
@@ -73,39 +105,12 @@ export default function CommonPagination({
             <div className="text-sm">
               <span className="font-medium">Page {currentPage}</span>
               {typeof totalItems === 'number' ? (
-                <span> of {totalPages} • </span>
+                <span> of {computedTotalPages} • </span>
               ) : (
                 <span> • </span>
               )}
               <span>Showing {itemsPerPage} entries</span>
-              {typeof totalItems === 'string' && (
-                <span> (Total: {totalItems})</span>
-              )}
-              
-              {/* Show active filters */}
-              {/* {showFiltersInfo && (
-                (Object.keys(masterFilters).some(key => masterFilters[key])) ||
-                (Object.keys(detailedFilters).length > 0) ? (
-                  <div className="mt-1 text-xs text-blue-600">
-                    🔍 Filters active
-                    {Object.keys(masterFilters).some(key => masterFilters[key]) && (
-                      <span className="ml-1">• Master: {Object.entries(masterFilters).filter(([_, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')}</span>
-                    )}
-                    {Object.keys(detailedFilters).length > 0 && (
-                      <span className="ml-1">• Detailed: {Object.entries(detailedFilters).filter(([_, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')}</span>
-                    )}
-                  </div>
-                ) : null
-              )}
-               */}
-
-              {/* Show filter loading indicator */}
-              {/* {showFiltersInfo && filterLoading && (
-                <div className="mt-1 text-xs text-orange-600">
-                  <span className="animate-spin inline-block w-3 h-3 border-2 border-orange-600 border-t-transparent rounded-full mr-1"></span>
-                  Updating filters...
-                </div>
-              )} */}
+              <span> (Total: {totalItems})</span>
             </div>
           )}
         </div>
@@ -115,12 +120,12 @@ export default function CommonPagination({
           {/* Refresh Button */}
           {showRefreshButton && onRefresh && (
             <button 
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 cursor-pointer"
+              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-black cursor-pointer"
               onClick={onRefresh}
               disabled={loading}
               title="Refresh with current filters"
             >
-              🔄
+              <RefreshCw size={16} />
             </button>
           )}
           
@@ -138,22 +143,35 @@ export default function CommonPagination({
           {(() => {
             const pages = [];
             
-            if (totalPages <= 5) {
+            if (displayTotalPages <= 5) {
               // If total pages is 5 or less, show all pages
-              for (let i = 1; i <= totalPages; i++) {
+              for (let i = 1; i <= displayTotalPages; i++) {
                 pages.push(i);
               }
             } else {
-              // Show first 5 pages
-              for (let i = 1; i <= 5; i++) {
+              // Dynamic window around current page with first/last and ellipses
+              const windowSize = 5;
+              const half = Math.floor(windowSize / 2);
+              let start = Math.max(1, currentPage - half);
+              let end = Math.min(displayTotalPages, start + windowSize - 1);
+              start = Math.max(1, Math.min(start, end - windowSize + 1));
+
+              // Always include first page
+              pages.push(1);
+
+              // Left ellipsis
+              if (start > 2) pages.push('...');
+
+              // Middle window
+              for (let i = Math.max(2, start); i <= Math.min(displayTotalPages - 1, end); i++) {
                 pages.push(i);
               }
-              
-              // Add ellipsis
-              pages.push('...');
-              
-              // Add total pages
-              pages.push(totalPages);
+
+              // Right ellipsis
+              if (end < displayTotalPages - 1) pages.push('...');
+
+              // Always include last page
+              if (displayTotalPages > 1) pages.push(displayTotalPages);
             }
             
             return pages.map((page, index) => (
@@ -181,7 +199,7 @@ export default function CommonPagination({
           <button 
             className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 cursor-pointer"
             onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage >= totalPages || loading}
+            disabled={currentPage >= displayTotalPages || loading}
             title="Next page"
           >
             &gt;
@@ -193,7 +211,7 @@ export default function CommonPagination({
             <input
               type="number"
               min="1"
-              max={totalPages}
+              max={displayTotalPages}
               value={goToPageInput}
               onChange={(e) => setGoToPageInput(e.target.value)}
               onKeyDown={handleGoToPageKeyDown}
@@ -201,7 +219,7 @@ export default function CommonPagination({
               className="w-16 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={loading}
             />
-            <span className="text-xs text-gray-500">of {totalPages}</span>
+            <span className="text-xs text-gray-500">of {computedTotalPages}</span>
           </div>
           
           {/* Items per page dropdown */}
@@ -209,7 +227,7 @@ export default function CommonPagination({
             <span className="text-xs text-gray-600">Show:</span>
             <select
               value={itemsPerPage}
-              onChange={(e) => onItemsPerPageChange(parseInt(e.target.value))}
+              onChange={handleItemsPerPageSelect}
               className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
               disabled={loading}
             >

@@ -419,6 +419,16 @@ class ApiService {
     return this.handleResponse<{ message: string }>(response);
   }
 
+  // Bulk update cells
+  async bulkUpdateCells(updates: Array<{rowIndex: number, columnId: string, value: any}>): Promise<{ success: boolean; message: string; totalUpdated: number; updateResults: any[] }> {
+    const response = await fetch(`${API_BASE_URL}/bulk-update-cells`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    });
+    return this.handleResponse<{ success: boolean; message: string; totalUpdated: number; updateResults: any[] }>(response);
+  }
+
   // Surname data (supports master filters as well)
   async getSurnameData(filters: {
     name?: string;

@@ -1,5 +1,15 @@
 'use client';
 
+/**
+ * Village Mapping Page
+ * 
+ * NEW FEATURE: Auto-loading with default filters
+ * - Both checkboxes (ग्राम पंचायत and गाँव का नाम) are automatically checked on page load
+ * - Data table shows immediately with default data
+ * - User can use MasterFilter to refine results
+ * - Reset to Default button to restore default state
+ */
+
 import { useState, useEffect, useMemo } from 'react';
 import { ArrowRight, MapPin, Search, RefreshCw } from 'lucide-react';
 import Navbar from '../../components/Navbar';
@@ -13,7 +23,7 @@ export default function VillageMappingPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [villageData, setVillageData] = useState<VillageMappingData[]>([]);
-  const [showTable, setShowTable] = useState(false);
+  const [showTable, setShowTable] = useState(true); // Changed to true by default
   const [formData, setFormData] = useState({
     villageName: '',
     gp: '',
@@ -28,9 +38,9 @@ export default function VillageMappingPage() {
   // Division/District reference data for mapping District name -> DISTRICT_CODE
   const [divisionData, setDivisionData] = useState<DivisionData[]>([]);
 
-  // Checkbox states for village mapping form fields
-  const [villageNameChecked, setVillageNameChecked] = useState(false);
-  const [gpChecked, setGpChecked] = useState(false);
+  // Checkbox states for village mapping form fields - BOTH CHECKED BY DEFAULT
+  const [villageNameChecked, setVillageNameChecked] = useState(true); // Changed to true
+  const [gpChecked, setGpChecked] = useState(true); // Changed to true
 
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -43,6 +53,7 @@ export default function VillageMappingPage() {
   // Fetch village mapping data from API with master filters
   const fetchVillageMappingData = async (filters?: any, page: number = 1) => {
     try {
+      console.log('🚀 Starting fetchVillageMappingData...');
       setLoading(true);
       setError(null); // Clear previous errors
       
@@ -65,7 +76,22 @@ export default function VillageMappingPage() {
         parliament: combinedFilters.parliament,
       });
       
-      console.log('✅ API Response received:', response);
+      console.log('✅ Response type:', typeof response);
+      console.log('✅ Response length:', response?.length);
+      console.log('✅ Is array:', Array.isArray(response));
+      
+      // Ensure response is an array
+      if (!Array.isArray(response)) {
+        console.warn('⚠️ API response is not an array, converting to empty array');
+        setVillageData([]);
+        setPagination(prev => ({
+          ...prev,
+          currentPage: page,
+          totalItems: 0,
+          totalPages: 1
+        }));
+        return;
+      }
       
       // Update pagination state
       const totalItems = response.length;
@@ -80,6 +106,7 @@ export default function VillageMappingPage() {
       
       setVillageData(response);
       console.log(`✅ Fetched ${response.length} villages from API with filters:`, combinedFilters);
+      console.log('✅ Village data state updated');
       
     } catch (error: any) {
       console.error('❌ Error fetching village mapping data:', error);
@@ -104,6 +131,7 @@ export default function VillageMappingPage() {
       setVillageData([]);
     } finally {
       setLoading(false);
+      console.log('🏁 fetchVillageMappingData completed');
     }
   };
 
@@ -119,6 +147,34 @@ export default function VillageMappingPage() {
     })();
   }, []);
 
+  // NEW: Auto-fetch data on page load since both checkboxes are checked by default
+  useEffect(() => {
+    // Automatically fetch data when page loads since both checkboxes are checked
+    console.log('🔄 Page loaded - checking if auto-fetch should happen...');
+    console.log('✅ Checkbox states:', { villageNameChecked, gpChecked });
+    console.log('✅ Show table state:', showTable);
+    
+    if (villageNameChecked && gpChecked) {
+      console.log('🔄 Auto-fetching village mapping data on page load...');
+      console.log('✅ Both checkboxes are checked by default: ग्राम पंचायत and गाँव का नाम');
+      console.log('📊 Data table will show automatically with default filters');
+      
+      // Small delay to ensure component is fully mounted
+      setTimeout(() => {
+        fetchVillageMappingData({
+          villageName: formData.villageName,
+          district: masterFilters.district,
+          block: masterFilters.block,
+          gp: formData.gp,
+          assembly: masterFilters.assembly,
+          parliament: masterFilters.parliament
+        }, 1);
+      }, 100);
+    } else {
+      console.log('⚠️ Checkboxes not checked, skipping auto-fetch');
+    }
+  }, [villageNameChecked, gpChecked, showTable]); // Added dependencies to ensure it runs when needed
+
   // Effect to refetch data when master filters change
   useEffect(() => {
     if (masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block) {
@@ -127,7 +183,15 @@ export default function VillageMappingPage() {
       if (!showTable) {
         setShowTable(true);
       }
-      fetchVillageMappingData();
+      // Fetch data with current master filters
+      fetchVillageMappingData({
+        villageName: formData.villageName,
+        district: masterFilters.district,
+        block: masterFilters.block,
+        gp: formData.gp,
+        assembly: masterFilters.assembly,
+        parliament: masterFilters.parliament
+      }, 1);
     } else {
       // If all master filters are cleared, clear data if table is shown
       if (showTable) {
@@ -135,7 +199,7 @@ export default function VillageMappingPage() {
         setVillageData([]);
       }
     }
-  }, [masterFilters, showTable]);
+  }, [masterFilters, showTable, formData.villageName, formData.gp]);
 
   const handleMasterFilterChange = (filters: any) => {
     console.log('Master filter changed:', filters);
@@ -163,7 +227,7 @@ export default function VillageMappingPage() {
       gp: formData.gp,
       assembly: masterFilters.assembly,
       parliament: masterFilters.parliament
-    });
+    }, 1); // Add page number parameter
   };
 
   const handleClearFilters = async () => {
@@ -190,6 +254,33 @@ export default function VillageMappingPage() {
     } finally {
       setRefreshing(false);
     }
+  };
+
+  // NEW: Function to reset to default state (both checkboxes checked)
+  const handleResetToDefault = () => {
+    console.log('🔄 Resetting to default state...');
+    setVillageNameChecked(true);
+    setGpChecked(true);
+    setFormData({
+      villageName: '',
+      gp: '',
+    });
+    setShowTable(true);
+    
+    // Clear any errors
+    setError(null);
+    
+    // Fetch data with default state
+    fetchVillageMappingData({
+      villageName: '',
+      district: masterFilters.district,
+      block: masterFilters.block,
+      gp: '',
+      assembly: masterFilters.assembly,
+      parliament: masterFilters.parliament
+    }, 1);
+    
+    console.log('✅ Reset to default state completed');
   };
 
   // Pagination handlers
@@ -276,6 +367,7 @@ export default function VillageMappingPage() {
 
   // Transform data for display: replace district name with its DISTRICT_ID (if found)
   const displayVillageData = useMemo(() => {
+  
     if (!Array.isArray(villageData) || villageData.length === 0) return villageData as any;
     return villageData.map(row => {
       const targetName = (row.district || '').toString().trim().toLowerCase();
@@ -283,7 +375,7 @@ export default function VillageMappingPage() {
       return match ? { ...row, district: String(match.DISTRICT_ID) } : row;
     });
   }, [villageData, divisionData]);
-
+  
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
       ...prev,
@@ -334,7 +426,9 @@ export default function VillageMappingPage() {
       );
       setError('Failed to update village mapping data. Please try again.');
     }
+
   };
+  
 
   return (
     <div>
@@ -359,8 +453,25 @@ export default function VillageMappingPage() {
       
       <Navbar />
       
+      {/* Default Filters Status Display */}
+      <div className="bg-green-50 border border-green-200 rounded-lg mx-6 mt-4 p-3">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
+            <div className="h-2 w-2 bg-green-400 rounded-full"></div>
+          </div>
+          <div className="ml-3">
+            <p className="text-sm text-green-800">
+              <strong>✅ Default Filters Applied:</strong> ग्राम पंचायत and गाँव का नाम are automatically checked
+            </p>
+            <p className="text-xs text-green-600 mt-1">
+              Data table is loading with default filters. Use MasterFilter above to refine results further.
+            </p>
+          </div>
+        </div>
+      </div>
+      
       {/* Master Filter Status Display */}
-      {/* {(masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block) && (
+      {(masterFilters.parliament || masterFilters.assembly || masterFilters.district || masterFilters.block) && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg mx-6 mt-4 p-3">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -368,7 +479,7 @@ export default function VillageMappingPage() {
             </div>
             <div className="ml-3">
               <p className="text-sm text-blue-800">
-                <strong>Active Filters:</strong> {[
+                <strong>Active Master Filters:</strong> {[
                   masterFilters.parliament && `Parliament: ${masterFilters.parliament}`,
                   masterFilters.assembly && `Assembly: ${masterFilters.assembly}`,
                   masterFilters.district && `District: ${masterFilters.district}`,
@@ -381,7 +492,7 @@ export default function VillageMappingPage() {
             </div>
           </div>
         </div>
-      )} */}
+      )}
       
       {/* Error Display */}
       {error && (
@@ -411,8 +522,8 @@ export default function VillageMappingPage() {
       
       {/* Form Fields Section */}
       <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 flex justify-center">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-4 gap-6 mb-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-5 gap-4 mb-6">
             {/* गाँव का नाम */}
             <div className="flex items-center space-x-3">
               <input
@@ -427,7 +538,8 @@ export default function VillageMappingPage() {
                 className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
               />
               <label className="text-sm font-medium text-gray-700 cursor-pointer">
-                गाँव का नाम
+                <span className="font-bold">गाँव का नाम</span>
+                <span className="block text-xs text-gray-500">(Auto-checked)</span>
               </label>
             </div>
             
@@ -445,7 +557,8 @@ export default function VillageMappingPage() {
                 className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
               />
               <label className="text-sm font-medium text-gray-700 cursor-pointer">
-                ग्राम पंचायत
+                <span className="font-bold">ग्राम पंचायत</span>
+                <span className="block text-xs text-gray-500">(Auto-checked)</span>
               </label>
             </div>
             
@@ -486,6 +599,18 @@ export default function VillageMappingPage() {
                 )}
               </button>
             </div>
+            
+            {/* Reset to Default Button */}
+            <div className="flex items-center">
+              <button
+                onClick={handleResetToDefault}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium text-sm flex items-center space-x-2"
+                title="Reset to default state (both checkboxes checked)"
+              >
+                <RefreshCw size={16} />
+                <span>Reset to Default</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -494,7 +619,7 @@ export default function VillageMappingPage() {
       {showTable && (
         <div className="pt-4 pb-4">
           <div className="mx-6">
-            <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="bg-white rounded-lg shadow overflow-visible">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h3 className="text-lg font-medium text-gray-900 flex items-center">
                   <MapPin className="w-5 h-5 mr-2 text-blue-600" />
@@ -514,48 +639,50 @@ export default function VillageMappingPage() {
                   </div>
                 </div>
               )}
-              
+
               {/* Data Table (Excel-like) */}
               {!loading && (
-                <div className="overflow-x-auto">
-                  {displayVillageData.length > 0 ? (
-                    <ExcelDataTable
-                      data={displayVillageData as unknown as Record<string, any>[]}
-                      columns={excelColumns as any}
-                      loading={loading}
-                      onUpdateRow={async (rowIndex, columnId, value) => {
-                        // Ignore row header updates
-                        if (columnId === 'select') return;
-                        const row = displayVillageData[rowIndex];
-                        if (!row) return;
-                        const update: Partial<VillageMappingData> = {} as any;
-                        // Only allow updates for known keys
-                        if (['district','block','gp','assembly','parliament','villageName'].includes(columnId)) {
-                          (update as any)[columnId] = value;
-                          await handleUpdateVillageMapping(row.id, update);
-                        }
-                      }}
-                      showPagination={pagination.totalPages > 1}
-                      pagination={pagination}
-                      onPageChange={handlePageChange}
-                      onItemsPerPageChange={handleItemsPerPageChange}
-                      showRefreshButton={true}
-                      onRefresh={() => fetchVillageMappingData({
-                        villageName: formData.villageName,
-                        district: masterFilters.district,
-                        block: masterFilters.block,
-                        gp: formData.gp,
-                        assembly: masterFilters.assembly,
-                        parliament: masterFilters.parliament
-                      }, pagination.currentPage)}
-                      tableHeight="h-[70vh]"
-                    />
+                <div className="overflow-x-auto min-h-[400px] bg-white border border-gray-200">
+                  {displayVillageData && displayVillageData.length > 0 ? (
+                    <div className="w-full p-4">
+                      <ExcelDataTable
+                        data={displayVillageData as unknown as Record<string, any>[]}
+                        columns={excelColumns as any}
+                        loading={loading}
+                        onUpdateRow={async (rowIndex, columnId, value) => {
+                          // Ignore row header updates
+                          if (columnId === 'select') return;
+                          const row = displayVillageData[rowIndex];
+                          if (!row) return;
+                          const update: Partial<VillageMappingData> = {} as any;
+                          // Only allow updates for known keys
+                          if (['district','block','gp','assembly','parliament','villageName'].includes(columnId)) {
+                            (update as any)[columnId] = value;
+                            await handleUpdateVillageMapping(row.id, update);
+                          }
+                        }}
+                        showPagination={pagination.totalPages > 1}
+                        pagination={pagination}
+                        onPageChange={handlePageChange}
+                        onItemsPerPageChange={handleItemsPerPageChange}
+                        showRefreshButton={true}
+                        onRefresh={() => fetchVillageMappingData({
+                          villageName: formData.villageName,
+                          district: masterFilters.district,
+                          block: masterFilters.block,
+                          gp: formData.gp,
+                          assembly: masterFilters.assembly,
+                          parliament: masterFilters.parliament
+                        }, pagination.currentPage)}
+                        tableHeight="h-[70vh]"
+                      />
+                    </div>
                   ) : (
-                    <div className="px-6 py-8 text-center text-gray-500">
+                    <div className="px-6 py-16 text-center text-gray-500 bg-gray-50 m-4 rounded-lg border-2 border-dashed border-gray-300">
                       <div className="flex flex-col items-center">
-                        <MapPin className="w-8 h-8 text-gray-300 mb-2" />
-                        <p>No village mapping data found</p>
-                        <p className="text-sm">Try adjusting your filters</p>
+                        <MapPin className="w-16 h-16 text-gray-300 mb-4" />
+                        <p className="text-lg font-medium mb-2">No village mapping data found</p>
+                        <p className="text-sm">Try adjusting your filters or check the database connection</p>
                       </div>
                     </div>
                   )}
@@ -578,22 +705,22 @@ export default function VillageMappingPage() {
         </div>
       )}
       
-      {/* No Data Message */}
-      {!showTable && (
+      {/* Loading Message - Show when page first loads */}
+      {!showTable && !loading && (
         <div className="flex items-center justify-center py-16">
           <div className="text-center">
             <div className="text-gray-400 mb-4">
               <MapPin className="w-16 h-16 mx-auto" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Village Mapping Data Selected</h3>
-            <p className="text-gray-500 mb-4">Select one or more filters and click "Search" to view village mapping data</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Village Mapping Data...</h3>
+            <p className="text-gray-500 mb-4">Please wait while we fetch the default data for you</p>
             <div className="flex items-center justify-center space-x-2 text-sm text-gray-400">
               <span>✓</span>
-              <span>Check the filters you want to apply</span>
+              <span>Both checkboxes are automatically checked</span>
               <span>→</span>
-              <span>Click "Search" button</span>
+              <span>Data table will appear shortly</span>
               <span>→</span>
-              <span>View results in table</span>
+              <span>Use MasterFilter to refine results</span>
             </div>
           </div>
         </div>

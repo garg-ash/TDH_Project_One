@@ -4,6 +4,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide Next.js dev indicator (small N bubble) in development */
+button[aria-label="Open Next.js dev overlay"],
+div[aria-label="Open Next.js dev overlay"],
+#nextjs-toast,
+.nextjs-toast,
+[data-nextjs-toast],
+[data-nextjs-dev-overlay] {
+  display: none !important;
+}
+
+
 
 body {
   margin: 0;

@@ -4,6 +4,19 @@ import { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
 import { ChevronDown, Search, Play, Save, Download, Lock, Unlock, RefreshCw } from 'lucide-react';
 
+/**
+ * MasterFilter Component
+ * 
+ * This component now properly handles both master filters and detailed filters from the Filter component.
+ * The Save, Export, and Lock buttons are enabled whenever ANY filters are active (master or detailed).
+ * 
+ * Key improvements:
+ * - Real-time detection of detailed filter changes
+ * - Buttons work with any combination of master and detailed filters
+ * - Enhanced debugging and logging for troubleshooting
+ * - Improved filter state management and persistence
+ */
+
 interface MasterFilterProps {
   onMasterFilterChange: (filters: {
     parliament: string;
@@ -174,7 +187,14 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
   const [presetName, setPresetName] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [showPresetsDropdown, setShowPresetsDropdown] = useState(false);
-  const [appliedFilters, setAppliedFilters] = useState({ parliament: '', assembly: '', district: '', block: '' });
+  const [appliedFilters, setAppliedFilters] = useState({ 
+    parliament: '', 
+    assembly: '', 
+    district: '', 
+    block: '', 
+    hasDetailedFilters: false,
+    detailedFilters: {} as Record<string, any>
+  });
   const [exportFormat, setExportFormat] = useState<'csv' | 'excel' | 'pdf'>('csv');
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   
@@ -228,6 +248,14 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
           setDistrict(lockData.lockedFilters.district || '');
           setBlock(lockData.lockedFilters.block || '');
           
+          // Restore detailed filters if they exist
+          if (lockData.detailedFilters) {
+            setAppliedFilters(prev => ({
+              ...prev,
+              ...lockData.detailedFilters
+            }));
+          }
+          
           // Automatically apply the locked filters
           onMasterFilterChange(lockData.lockedFilters);
         }
@@ -239,13 +267,37 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
 
   // Listen to Filter section apply/clear events to toggle buttons
   useEffect(() => {
-    const onApplied = () => setAppliedFilters(prev => ({ ...prev, parliament: prev.parliament || 'x' }));
-    const onCleared = () => setAppliedFilters({ parliament: '', assembly: '', district: '', block: '' });
+    const onApplied = () => {
+      console.log('🔔 Filter section applied event received');
+      setAppliedFilters(prev => ({ ...prev, parliament: prev.parliament || 'x' }));
+    };
+    
+    const onCleared = () => {
+      console.log('🔔 Filter section cleared event received');
+      setAppliedFilters({ parliament: '', assembly: '', district: '', block: '', hasDetailedFilters: false, detailedFilters: {} });
+    };
+    
+    // Listen for detailed filter changes from Filter component
+    const onDetailedFilterChange = (event: CustomEvent) => {
+      console.log('🔔 Detailed filter changed event received:', event.detail);
+      const hasDetailedFilters = event.detail && Object.keys(event.detail).length > 0 && 
+        Object.values(event.detail).some(val => val && val !== '');
+      console.log('🔍 Has detailed filters:', hasDetailedFilters);
+      setAppliedFilters(prev => ({ 
+        ...prev, 
+        hasDetailedFilters,
+        detailedFilters: hasDetailedFilters ? event.detail : {}
+      }));
+    };
+    
     window.addEventListener('filter-section-applied', onApplied as any);
     window.addEventListener('filter-section-cleared', onCleared as any);
+    window.addEventListener('detailed-filter-changed', onDetailedFilterChange as any);
+    
     return () => {
       window.removeEventListener('filter-section-applied', onApplied as any);
       window.removeEventListener('filter-section-cleared', onCleared as any);
+      window.removeEventListener('detailed-filter-changed', onDetailedFilterChange as any);
     };
   }, []);
 
@@ -353,7 +405,7 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
       district,
       block,
     });
-    setAppliedFilters({ parliament: parliament || '', assembly: assembly || '', district: district || '', block: block || '' });
+    setAppliedFilters({ parliament: parliament || '', assembly: assembly || '', district: district || '', block: block || '', hasDetailedFilters: false, detailedFilters: {} });
   };
 
   // Function to clear all filters
@@ -365,7 +417,7 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
     // Also clear display labels so UI reflects reset immediately
     setParliamentLabel('');
     setAssemblyLabel('');
-    setAppliedFilters({ parliament: '', assembly: '', district: '', block: '' });
+    setAppliedFilters({ parliament: '', assembly: '', district: '', block: '', hasDetailedFilters: false, detailedFilters: {} });
     onMasterFilterChange({
       parliament: '',
       assembly: '',
@@ -374,8 +426,24 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
     });
   };
 
-  // Check if any filters are active
-  const hasActiveFilters = parliament || assembly || district || block;
+  // Check if any filters are active (master or detailed)
+  // Also check if we have any data available for export
+  const hasActiveFilters = parliament || assembly || district || block || appliedFilters.hasDetailedFilters;
+  const hasAnyDataForExport = hasActiveFilters || hasData;
+  
+  // Debug logging for filter state
+  useEffect(() => {
+    console.log('🔍 MasterFilter filter state:', {
+      parliament,
+      assembly,
+      district,
+      block,
+      hasDetailedFilters: appliedFilters.hasDetailedFilters,
+      hasActiveFilters,
+      hasData,
+      hasAnyDataForExport
+    });
+  }, [parliament, assembly, district, block, appliedFilters.hasDetailedFilters, hasActiveFilters, hasData, hasAnyDataForExport]);
 
   // Toggle lock state
   const toggleLock = () => {
@@ -392,6 +460,8 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
           district,
           block
         },
+        // Also store the current detailed filters state
+        detailedFilters: appliedFilters,
         lockedAt: new Date().toISOString()
       };
       
@@ -433,9 +503,11 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
 
   // Save current filters
   const handleSaveFilters = async () => {
-    // Check if any filters are selected
-    const hasFilters = parliament || assembly || district || block;
-    if (!hasFilters) {
+    // Check if any filters are selected (master or detailed)
+    const hasMasterFilters = parliament || assembly || district || block;
+    const hasDetailedFilters = appliedFilters.hasDetailedFilters;
+    
+    if (!hasMasterFilters && !hasDetailedFilters) {
       triggerSaveNotification('⚠️ Please select at least one filter before saving.', 'error');
       return;
     }
@@ -454,6 +526,8 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
           district: district || '',
           block: block || ''
         },
+        // Include detailed filters if they exist
+        detailedFilters: appliedFilters.hasDetailedFilters ? appliedFilters.detailedFilters : undefined,
         createdAt: new Date().toISOString()
       };
 
@@ -510,7 +584,10 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
 
   // Handle export functionality
   const handleExport = async (format: 'csv' | 'excel' | 'pdf') => {
-    if (!(parliament || assembly || district || block)) {
+    const hasMasterFilters = parliament || assembly || district || block;
+    const hasDetailedFilters = appliedFilters.hasDetailedFilters;
+    
+    if (!hasMasterFilters && !hasDetailedFilters) {
       alert('⚠️ Please select at least one filter before exporting.');
       return;
     }
@@ -522,6 +599,8 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
         assembly: assembly || undefined,
         district: district || undefined,
         block: block || undefined,
+        // Include detailed filters if they exist
+        ...(appliedFilters.hasDetailedFilters ? appliedFilters.detailedFilters : {}),
         format
       };
 
@@ -701,11 +780,11 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
                 }, 1000);
               }}
               className={`px-3 py-2 rounded-lg transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px] h-[40px] ${
-                hasActiveFilters 
+                hasAnyDataForExport 
                   ? 'bg-gray-600 text-white hover:bg-gray-700' 
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
-              disabled={!hasActiveFilters}
+              disabled={!hasAnyDataForExport}
             >
               <Save size={16} />
               <span>Save</span>
@@ -796,11 +875,11 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
             <button
               onClick={() => setShowExportDropdown(!showExportDropdown)}
               className={`px-3 py-2 rounded-lg transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px] h-[40px] ${
-                (hasActiveFilters || hasData)
+                hasAnyDataForExport
                   ? 'bg-gray-600 text-white hover:bg-gray-700' 
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
-              disabled={!(hasActiveFilters || hasData)}
+              disabled={!hasAnyDataForExport}
             >
               <Download size={16} />
               <span className="text-xs">{isExporting ? 'Exporting...' : 'Export'}</span>
@@ -843,7 +922,7 @@ export default function MasterFilter({ onMasterFilterChange, hasData }: MasterFi
                 ? 'bg-gray-600 text-white hover:bg-gray-700' 
                 : 'bg-gray-600 text-white hover:bg-gray-700'
             }`}
-            disabled={!(hasActiveFilters || hasData)}
+            disabled={!hasAnyDataForExport}
           >
             {isLocked ? <Unlock size={16} /> : <Lock size={16} />}
             <span>{isLocked ? 'Unlock' : 'Lock'}</span>

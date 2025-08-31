@@ -197,14 +197,19 @@ export default function Navbar() {
          <div className="flex items-center justify-between">
            {/* Logo Section - Left Aligned with minimal left margin */}
            <div className="flex items-center space-x-3 flex-shrink-0">
-             <img 
-               src="/logo.png" 
-               alt="THE BIG OWL Logo" 
-               className="w-10 h-10 object-contain flex-shrink-0" 
-             />
-             <div className="hidden sm:block">
-               <h1 className="text-lg font-semibold text-gray-800">THE BIG OWL</h1>
-             </div>
+             <button 
+               onClick={() => router.push('/')}
+               className="flex items-center space-x-3 hover:opacity-80 transition-opacity duration-200 cursor-pointer"
+             >
+               <img 
+                 src="/logo.png" 
+                 alt="THE BIG OWL Logo" 
+                 className="w-10 h-10 object-contain flex-shrink-0" 
+               />
+               <div className="hidden sm:block">
+                 <h1 className="text-lg font-semibold text-gray-800">THE BIG OWL</h1>
+               </div>
+             </button>
            </div>
 
            {/* Navigation Menu - Center with proper spacing */}

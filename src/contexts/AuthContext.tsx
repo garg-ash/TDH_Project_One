@@ -90,6 +90,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setToken(null);
     localStorage.removeItem('authToken');
     localStorage.removeItem('userInfo');
+    // Redirect to login page after logout
+    window.location.href = '/login';
   };
 
   const hasRole = (roles: string | string[]): boolean => {

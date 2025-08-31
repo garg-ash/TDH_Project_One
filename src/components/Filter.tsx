@@ -4,6 +4,19 @@ import React, { useState, useEffect } from 'react';
 import { X, ChevronDown, ChevronUp, Search, Play, RefreshCw } from 'lucide-react';
 import { apiService } from '../services/api';
 
+/**
+ * Filter Component
+ * 
+ * This component now provides real-time notifications to MasterFilter about detailed filter changes.
+ * This ensures that the Save, Export, and Lock buttons in MasterFilter work properly when
+ * detailed filters are applied, even without master filters.
+ * 
+ * Key improvements:
+ * - Real-time filter change notifications
+ * - Enhanced debugging and logging
+ * - Better integration with MasterFilter component
+ */
+
 interface FilterProps {
   masterFilters?: {
     parliament?: string;
@@ -109,7 +122,7 @@ function SearchableSelect({
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
+          <div className="absolute z-[9999] w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
             {/* Search Input */}
             <div className="p-2 border-b border-gray-200">
               <div className="relative">
@@ -275,6 +288,38 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
     fetchFilterOptions();
   }, [masterFilters, villageNameFilter, gramPanchayatFilter, nameFilter, fnameFilter, motherNameFilter, surnameFilter, castIdFilter, castTypeFilter, mobile1Filter, mobile2Filter, dobFilter, ageFromFilter, ageToFilter, malefemaleFilter, religionFilter, categoryFilter]);
 
+  // Notify MasterFilter about detailed filter changes in real-time
+  useEffect(() => {
+    const currentFilters = {
+      village: villageNameFilter,
+      tehsil: gramPanchayatFilter,
+      name: nameFilter,
+      fname: fnameFilter,
+      mname: motherNameFilter,
+      surname: surnameFilter,
+      castId: castIdFilter,
+      castIda: castTypeFilter,
+      mobile1: mobile1Filter,
+      mobile2: mobile2Filter,
+      dateOfBirth: dobFilter,
+      ageMin: ageFromFilter ? parseInt(ageFromFilter) : undefined,
+      ageMax: ageToFilter ? parseInt(ageToFilter) : undefined,
+      malefemale: malefemaleFilter,
+      religion: religionFilter,
+      category: categoryFilter
+    };
+    
+    // Remove empty/undefined values
+    const cleanFilters = Object.fromEntries(
+      Object.entries(currentFilters).filter(([_, value]) => value !== undefined && value !== '')
+    );
+    
+    console.log('📤 Real-time filter change notification:', cleanFilters);
+    
+    // Notify MasterFilter about detailed filter changes in real-time
+    window.dispatchEvent(new CustomEvent('detailed-filter-changed', { detail: cleanFilters }));
+  }, [villageNameFilter, gramPanchayatFilter, nameFilter, fnameFilter, motherNameFilter, surnameFilter, castIdFilter, castTypeFilter, mobile1Filter, mobile2Filter, dobFilter, ageFromFilter, ageToFilter, malefemaleFilter, religionFilter, categoryFilter]);
+
   // Also fetch on component mount
   useEffect(() => {
     console.log('🚀 Component mounted, fetching initial filter options...');
@@ -436,6 +481,10 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
     onFilterChange(cleanFilters);
     // Notify master filter that filter section applied
     window.dispatchEvent(new CustomEvent('filter-section-applied'));
+    
+    // Notify MasterFilter about detailed filter changes
+    console.log('📤 Dispatching detailed-filter-changed event with:', cleanFilters);
+    window.dispatchEvent(new CustomEvent('detailed-filter-changed', { detail: cleanFilters }));
   };
 
   const clearAllFilters = () => {
@@ -458,6 +507,10 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
     
     // Apply empty filters
     onFilterChange({});
+    
+    // Notify MasterFilter that detailed filters are cleared
+    console.log('📤 Dispatching detailed-filter-changed event (cleared) with:', {});
+    window.dispatchEvent(new CustomEvent('detailed-filter-changed', { detail: {} }));
     window.dispatchEvent(new CustomEvent('filter-section-cleared'));
   };
 
@@ -467,6 +520,29 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
     malefemaleFilter || mobile1Filter || mobile2Filter || 
     castIdFilter || castTypeFilter || motherNameFilter || surnameFilter || 
     religionFilter || categoryFilter;
+    
+  // Debug logging for filter state
+  useEffect(() => {
+    console.log('🔍 Filter component filter state:', {
+      villageNameFilter,
+      gramPanchayatFilter,
+      dobFilter,
+      ageFromFilter,
+      ageToFilter,
+      nameFilter,
+      fnameFilter,
+      malefemaleFilter,
+      mobile1Filter,
+      mobile2Filter,
+      castIdFilter,
+      castTypeFilter,
+      motherNameFilter,
+      surnameFilter,
+      religionFilter,
+      categoryFilter,
+      hasActiveFilters
+    });
+  }, [villageNameFilter, gramPanchayatFilter, dobFilter, ageFromFilter, ageToFilter, nameFilter, fnameFilter, malefemaleFilter, mobile1Filter, mobile2Filter, castIdFilter, castTypeFilter, motherNameFilter, surnameFilter, religionFilter, categoryFilter, hasActiveFilters]);
 
   return (
     <div className="bg-gray-50 border-b border-gray-200">
@@ -630,6 +706,11 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                   // Clear applied filters
                   onFilterChange({});
                   
+                  // Notify MasterFilter that detailed filters are cleared
+                  console.log('📤 Dispatching detailed-filter-changed event (cleared) with:', {});
+                  window.dispatchEvent(new CustomEvent('detailed-filter-changed', { detail: {} }));
+                  window.dispatchEvent(new CustomEvent('filter-section-cleared'));
+                  
                   // Refresh filter options
                   refreshFilterOptions();
                   
@@ -660,41 +741,38 @@ function Filter({ masterFilters = {}, onFilterChange, loading = false }: FilterP
                 />
               </div>
               
-              <SearchableSelect
-                id="name"
-                value={nameFilter}
-                onChange={setnameFilter}
-                options={filterOptions.names}
-                placeholder="नाम"
-                label=""
-                disabled={loading}
-                activeDropdown={activeDropdown}
-                onDropdownToggle={setActiveDropdown}
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="नाम"
+                  value={nameFilter}
+                  onChange={(e) => setnameFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                  disabled={loading}
+                />
+              </div>
               
-              <SearchableSelect
-                id="fname"
-                value={fnameFilter}
-                onChange={setfnameFilter}
-                options={filterOptions.fnames}
-                placeholder="पिता का नाम"
-                label=""
-                disabled={loading}
-                activeDropdown={activeDropdown}
-                onDropdownToggle={setActiveDropdown}
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="पिता का नाम"
+                  value={fnameFilter}
+                  onChange={(e) => setfnameFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                  disabled={loading}
+                />
+              </div>
               
-              <SearchableSelect
-                id="motherName"
-                value={motherNameFilter}
-                onChange={setmotherNameFilter}
-                options={filterOptions.motherNames}
-                placeholder="माता का नाम"
-                label=""
-                disabled={loading}
-                activeDropdown={activeDropdown}
-                onDropdownToggle={setActiveDropdown}
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="माता का नाम"
+                  value={motherNameFilter}
+                  onChange={(e) => setmotherNameFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all duration-200"
+                  disabled={loading}
+                />
+              </div>
               
               <SearchableSelect
                 id="surname"

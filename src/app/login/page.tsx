@@ -64,9 +64,9 @@ export default function LoginPage() {
       await login(formData.email, formData.password);
       setMessage('Login successful! Redirecting...');
       
-      // Redirect to dashboard after a short delay
+      // Redirect to home after a short delay
       setTimeout(() => {
-        router.push('/dashboard');
+        router.push('/home');
       }, 1000);
       
     } catch (error: any) {

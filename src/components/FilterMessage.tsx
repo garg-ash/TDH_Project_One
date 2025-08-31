@@ -14,7 +14,7 @@ const FilterMessage: React.FC<FilterMessageProps> = ({
   className = ""
 }) => {
   return (
-    <div className={`bg-white rounded-lg p-8 ${className}`}>
+    <div className={`bg-white rounded-lg p-8 shadow-none border-0 ${className}`}>
       <div className="text-center">
         <div className="text-gray-400 text-6xl mb-4">{icon}</div>
         <div className="text-gray-500 mb-4">{message}</div>

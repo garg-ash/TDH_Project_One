@@ -4,7 +4,6 @@ import "./globals.css";
 import { AuthProvider } from "../contexts/AuthContext";
 import { LanguageProvider } from "../contexts/LanguageContext";
 import { ProcessingProvider } from "../contexts/ProcessingContext";
-import FloatingLanguageSwitcher from "../components/FloatingLanguageSwitcher";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,10 +32,9 @@ export default function RootLayout({
       >
         <AuthProvider>
           <LanguageProvider>
-                                 <ProcessingProvider>
-                       {children}
-                       <FloatingLanguageSwitcher />
-                     </ProcessingProvider>
+            <ProcessingProvider>
+              {children}
+            </ProcessingProvider>
           </LanguageProvider>
         </AuthProvider>
       </body>
