@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ArrowRight } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 import MasterFilter from '../../components/MasterFilter';
@@ -39,6 +39,9 @@ export default function SurnamePage() {
 
   // State for saved data management
   const [savedDataCount, setSavedDataCount] = useState(0);
+  
+  // State for import session to control button enable/disable
+  const [hasImportSession, setHasImportSession] = useState<boolean>(false);
 
   // Dropdown state for count filter
   const [countFilter, setCountFilter] = useState('');
@@ -89,6 +92,41 @@ export default function SurnamePage() {
     } catch (error) {
       console.error('Error loading saved data count:', error);
     }
+  }, []);
+
+  // Check for import session on component mount and when localStorage changes
+  useEffect(() => {
+    // Only run on client side
+    if (typeof window === 'undefined') return;
+    
+    const checkImportSession = () => {
+      const sessionData = safeLocalStorage.getItem('surnameImportSession');
+      setHasImportSession(!!sessionData);
+    };
+    
+    // Check initially
+    checkImportSession();
+    
+    // Listen for localStorage changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'surnameImportSession') {
+        checkImportSession();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also check when window gains focus (for same-tab updates)
+    const handleFocus = () => {
+      checkImportSession();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   // Close dropdowns when clicking outside
@@ -551,6 +589,9 @@ export default function SurnamePage() {
           // Store in localStorage for persistence
           safeLocalStorage.setItem('surnameImportSession', JSON.stringify(importSession));
           
+          // Update state to enable View Imported button
+          setHasImportSession(true);
+          
           // Show success message
           const fileType = result.fileName.toLowerCase().endsWith('.csv') ? 'CSV' : 'Excel';
           const filterInfo = Object.keys(masterFilters).length > 0 ? 
@@ -772,15 +813,15 @@ export default function SurnamePage() {
           return;
         }
         const saveToDatabase = confirm(
-          `💾 Save Options for Imported Data\n\n` +
+          `💾 Save Modified Data to Database\n\n` +
           `File: ${importSessionInfo.fileName}\n` +
-          `Records: ${importSessionInfo.importedRows}\n\n` +
+          `Records: ${surnameData.length}\n\n` +
           `⚠️ IMPORTANT: This will REPLACE existing data for the current filters!\n` +
           `• Old records matching these filters will be DELETED\n` +
-          `• New imported data will be INSERTED\n` +
-          `• This ensures deleted rows won't appear again\n\n` +
+          `• New modified data will be INSERTED\n` +
+          `• This ensures your modifications are permanently saved\n\n` +
           `Choose save option:\n` +
-          `• Click "OK" to REPLACE data in database (permanent storage)\n` +
+          `• Click "OK" to SAVE modified data to database (permanent storage)\n` +
           `• Click "Cancel" to save to localStorage only\n\n` +
           `Which option do you prefer?`
         );
@@ -802,75 +843,27 @@ export default function SurnamePage() {
             return;
           }
           
-          // Save to database
+          // Save to database using the correct endpoint
           setLoading(true);
           
           try {
-            const response = await fetch(`http://localhost:5002/api/save-imported-data/${importSessionInfo.sessionId}`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                targetTable: 'voters' // Default table
-              })
-            });
+            // Use the working saveImportedDataToDatabase function
+            const saveSuccess = await saveImportedDataToDatabase(surnameData, masterFilters, importSessionInfo.fileName);
             
-            if (!response.ok) {
-              const errorText = await response.text();
-              throw new Error(`Failed to save to database: ${errorText}`);
-            }
-            
-            const result = await response.json();
-            
-            if (result.success) {
-              const replaceInfo = result.replaceMode && result.deletedCount > 0 ? 
-                `\n🗑️ Old records deleted: ${result.deletedCount}` : '';
-              
-              // Check if there were any errors during the process
-              if (result.errors && result.errors.length > 0) {
-                alert(`⚠️ Partially successful operation!\n\n` +
-                      `Total records processed: ${result.totalRecords}\n` +
-                      `Records ${result.replaceMode ? 'inserted' : 'saved'}: ${result.savedCount}${replaceInfo}\n` +
-                      `Errors occurred: ${result.errors.length}\n\n` +
-                      `Some data was saved, but there were issues with some records.\n` +
-                      `Check the console for detailed error information.`);
-              } else {
-                alert(`✅ Successfully ${result.replaceMode ? 'REPLACED' : 'saved'} data in database!\n\n` +
-                      `Total records processed: ${result.totalRecords}\n` +
-                      `Records ${result.replaceMode ? 'inserted' : 'saved'}: ${result.savedCount}${replaceInfo}\n\n` +
-                      `Data is now permanently stored in the database.\n\n` +
-                      `💡 Note: Old data has been replaced. When you refresh and apply the same filters, only the new imported data will appear.`);
-              }
-              
+            if (saveSuccess) {
               // Update session status
               importSessionInfo.status = 'saved';
               safeLocalStorage.setItem('surnameImportSession', JSON.stringify(importSessionInfo));
+              setHasImportSession(true);
               
+              return; // Exit early since we've handled database save
             } else {
-              throw new Error(result.error || 'Failed to save to database');
+              throw new Error('Save operation failed');
             }
             
           } catch (dbError) {
             console.error('Error saving to database:', dbError);
-            
-            // Try to parse error message for better user feedback
-            let errorMessage = 'Unknown error';
-            if (dbError instanceof Error) {
-              errorMessage = dbError.message;
-              // Check if it's a session error
-              if (errorMessage.includes('Import session not found')) {
-                errorMessage = 'Import session expired or not found. Please re-import your file.';
-              } else if (errorMessage.includes('Failed to save to database:')) {
-                // Extract the actual error from the response
-                const match = errorMessage.match(/Failed to save to database: (.+)/);
-                if (match) {
-                  errorMessage = match[1];
-                }
-              }
-            }
-            
-            alert(`❌ Error saving to database: ${errorMessage}\n\nFalling back to localStorage save only.`);
+            alert(`❌ Error saving to database: ${dbError instanceof Error ? dbError.message : 'Unknown error'}\n\nFalling back to localStorage save only.`);
             
             // Fallback to localStorage save
             await saveToLocalStorage();
@@ -888,6 +881,86 @@ export default function SurnamePage() {
     } catch (error) {
       console.error('Save error:', error);
       alert('❌ Error saving data. Please try again.');
+    }
+  };
+
+  // Working save function using the correct backend endpoint
+  const saveImportedDataToDatabase = async (data: SurnameData[], filters: any, fileName: string) => {
+    try {
+      console.log('🚀 Starting database save process...');
+      console.log('📊 Data to save:', data.length, 'records');
+      console.log('🔍 Filters:', filters);
+      console.log('📁 File name:', fileName);
+      
+      // Get the import session info
+      const importSessionInfo = JSON.parse(localStorage.getItem('surnameImportSession') || '{}');
+      console.log('📋 Import session info:', importSessionInfo);
+      
+      if (!importSessionInfo.sessionId) {
+        console.error('❌ No session ID found in import session info');
+        throw new Error('No import session found. Please re-import your file.');
+      }
+      
+      console.log('🔄 Using correct endpoint: /api/save-imported-data/:sessionId');
+      console.log('📋 Session ID:', importSessionInfo.sessionId);
+      
+      // Use the correct backend endpoint that actually exists
+      const requestBody = {
+        targetTable: 'voters', // Save to voters table (this is what the backend expects)
+        replaceMode: true // Replace existing data for these filters
+      };
+      
+      console.log('📤 Request body:', requestBody);
+      
+      const response = await fetch(`http://localhost:5002/api/save-imported-data/${importSessionInfo.sessionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response ok:', response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Save request failed:', errorText);
+        throw new Error(`Failed to save to database: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Save response:', result);
+      
+      if (result.success) {
+        const replaceInfo = result.replaceMode && result.deletedCount > 0 ? 
+          `\n🗑️ Old records deleted: ${result.deletedCount}` : '';
+        
+        // Check if there were any errors during the process
+        if (result.errors && result.errors.length > 0) {
+          console.log('⚠️ Some errors occurred:', result.errors);
+          alert(`⚠️ Partially successful operation!\n\n` +
+                `Total records processed: ${result.totalRecords}\n` +
+                `Records saved: ${result.savedCount}${replaceInfo}\n` +
+                `Errors occurred: ${result.errors.length}\n\n` +
+                `Some data was saved, but there were issues with some records.`);
+        } else {
+          alert(`✅ Successfully saved data to database!\n\n` +
+                `Total records processed: ${result.totalRecords}\n` +
+                `Records saved: ${result.savedCount}${replaceInfo}\n\n` +
+                `💡 Next time you apply the same filters, you'll get this modified data from the database!`);
+        }
+        
+        return true;
+      } else {
+        console.error('❌ Save failed:', result.error);
+        throw new Error(result.error || 'Failed to save to database');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error saving data to database:', error);
+      alert(`❌ Error saving to database: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return false;
     }
   };
 
@@ -1017,6 +1090,8 @@ export default function SurnamePage() {
       alert('❌ Error loading saved data. Please try again.');
     }
   };
+
+
 
 
 
@@ -1303,9 +1378,9 @@ export default function SurnamePage() {
               
               <button
                 onClick={handleViewImportedData}
-                disabled={!safeLocalStorage.getItem('surnameImportSession')}
+                disabled={!hasImportSession}
                 className={`px-4 py-2 rounded-lg transition-colors duration-200 font-medium text-sm flex items-center space-x-2 cursor-pointer ${
-                  safeLocalStorage.getItem('surnameImportSession')
+                  hasImportSession
                     ? 'bg-blue-600 text-white hover:bg-blue-700'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
@@ -1317,6 +1392,8 @@ export default function SurnamePage() {
                 </svg>
                 <span>View Imported</span>
               </button>
+              
+
               
 
               

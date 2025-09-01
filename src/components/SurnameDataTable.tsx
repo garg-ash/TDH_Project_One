@@ -5,6 +5,7 @@ import ExcelDataTable from './ExcelDataTable';
 import CommonPagination from './CommonPagination';
 import ProcessedDataTable from './ProcessedDataTable';
 import FilterMessage from './FilterMessage';
+import { useTablePermissions } from '../hooks/useTablePermissions';
 
 // Interface for surname data
 export interface SurnameData {
@@ -26,8 +27,8 @@ const extractSurname = (name?: string): string => {
   return nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
 };
 
-// Column definitions for ExcelDataTable
-const columns = [
+// Column definitions for ExcelDataTable - will be updated based on permissions
+const getColumns = (canEdit: boolean) => [
   {
     accessorKey: 'checkbox',
     header: 'Select',
@@ -39,37 +40,44 @@ const columns = [
     accessorKey: 'religion',
     header: 'Religion',
     size: 140,
+    readOnly: !canEdit,
   },
   {
     accessorKey: 'castId',
     header: 'Cast',
     size: 150,
+    readOnly: !canEdit,
   },
   {
     accessorKey: 'castIda',
     header: 'Cast Category',
     size: 150,
+    readOnly: !canEdit,
   },
   {
     accessorKey: 'surname',
     header: 'Surname',
     size: 200,
+    readOnly: !canEdit,
   },
   {
     accessorKey: 'count',
     header: 'Count',
     size: 120,
-    type: 'numeric'
+    type: 'numeric',
+    readOnly: !canEdit,
   },
   {
     accessorKey: 'castIdFromOtherTable',
     header: 'Cast Id',
     size: 150,
+    readOnly: !canEdit,
   },
   {
     accessorKey: 'castIdaFromOtherTable',
     header: 'Cast IDA',
     size: 150,
+    readOnly: !canEdit,
   },
   {
     accessorKey: 'processStatus',
@@ -103,6 +111,8 @@ interface SurnameDataTableProps {
   onPageChange?: (page: number) => void;
   onItemsPerPageChange?: (itemsPerPage: number) => void;
   showPagination?: boolean;
+  // Add new prop for saving process status
+  onSaveProcessStatus?: (id: number, status: any) => Promise<void>;
 }
 
 export default function SurnameDataTable({ 
@@ -115,8 +125,12 @@ export default function SurnameDataTable({
   pagination,
   onPageChange,
   onItemsPerPageChange,
-  showPagination = false
+  showPagination = false,
+  onSaveProcessStatus
 }: SurnameDataTableProps) {
+  
+  // Check table permissions
+  const { canEdit: canEditSurnames, canView: canViewSurnames } = useTablePermissions();
   
   // Add state for processed data view
   const [showProcessedData, setShowProcessedData] = useState(false);
@@ -126,7 +140,8 @@ export default function SurnameDataTable({
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   
-  // Add state for process tracking
+  // Add state for process tracking - now with permanent storage
+  // COMPLETELY CHANGED: Now using data ID as key instead of row index
   const [processHistory, setProcessHistory] = useState<Map<number, {
     status: 'pending' | 'processing' | 'completed' | 'failed' | 'needs_review';
     lastProcessed: string;
@@ -134,13 +149,209 @@ export default function SurnameDataTable({
     processedBy: string;
   }>>(new Map());
 
+  // Helper function to get process status by data ID
+  const getProcessStatusByDataId = useCallback((dataId: number) => {
+    // Now directly get from Map using data ID as key
+    return processHistory.get(dataId) || null;
+  }, [processHistory]);
+
+  // Load process status from backend when component mounts
+  useEffect(() => {
+    const loadProcessStatus = async () => {
+      if (!data || data.length === 0) return;
+      
+      try {
+        // Load process status for all data items by data ID
+        const statusPromises = data.map(async (item) => {
+          try {
+            // Try to load from localStorage first (for offline support)
+            const cachedStatus = localStorage.getItem(`process_status_${item.id}`);
+            if (cachedStatus) {
+              const parsed = JSON.parse(cachedStatus);
+              console.log(`📱 Loaded cached status for data ID ${item.id}:`, parsed);
+              return { 
+                dataId: item.id,
+                status: parsed.status,
+                lastProcessed: parsed.lastProcessed,
+                notes: parsed.notes,
+                processedBy: parsed.processedBy
+              };
+            }
+          } catch (error) {
+            console.log('No cached status found for item:', item.id);
+          }
+          
+          // Default status for new items
+          return {
+            dataId: item.id,
+            status: 'pending' as const,
+            lastProcessed: '',
+            notes: '',
+            processedBy: ''
+          };
+        });
+        
+        const statuses = await Promise.all(statusPromises);
+        const newProcessHistory = new Map();
+        
+        // Map by data ID instead of row index for proper persistence
+        statuses.forEach((status) => {
+          newProcessHistory.set(status.dataId, {
+            status: status.status,
+            lastProcessed: status.lastProcessed,
+            notes: status.notes,
+            processedBy: status.processedBy
+          });
+        });
+        
+        setProcessHistory(newProcessHistory);
+        console.log('✅ Loaded process status for', statuses.length, 'items');
+        console.log('📊 Process history map:', Array.from(newProcessHistory.entries()));
+        
+      } catch (error) {
+        console.error('Error loading process status:', error);
+      }
+    };
+    
+    loadProcessStatus();
+  }, [data]);
+
+  // Save process status to backend and localStorage
+  const saveProcessStatus = useCallback(async (id: number, status: any) => {
+    try {
+      // Save to backend if API available
+      if (onSaveProcessStatus) {
+        await onSaveProcessStatus(id, status);
+      }
+      
+      // Save to localStorage for offline support
+      localStorage.setItem(`process_status_${id}`, JSON.stringify(status));
+      
+      console.log(`✅ Process status saved for ID ${id}:`, status);
+      
+    } catch (error) {
+      console.error(`❌ Error saving process status for ID ${id}:`, error);
+      // Still save to localStorage even if backend fails
+      try {
+        localStorage.setItem(`process_status_${id}`, JSON.stringify(status));
+        console.log(`📱 Saved to localStorage as backup for ID ${id}`);
+      } catch (localError) {
+        console.error('Failed to save to localStorage:', localError);
+      }
+    }
+  }, [onSaveProcessStatus]);
+
+  // Manual status update function
+  const updateProcessStatus = useCallback(async (rowIndex: number, newStatus: 'pending' | 'processing' | 'completed' | 'failed' | 'needs_review', notes?: string) => {
+    try {
+      const rowData = data[rowIndex];
+      if (!rowData) {
+        console.error(`No data found for row ${rowIndex}`);
+        return;
+      }
+
+      const updatedStatus = {
+        status: newStatus,
+        lastProcessed: new Date().toISOString(),
+        notes: notes || `Status manually updated to ${newStatus}`,
+        processedBy: 'User'
+      };
+
+      // Update local state using data ID as key
+      setProcessHistory(prev => new Map(prev).set(rowData.id, updatedStatus));
+      
+      // Save to permanent storage
+      await saveProcessStatus(rowData.id, updatedStatus);
+      
+      console.log(`✅ Manually updated status for data ID ${rowData.id} to ${newStatus}`);
+      
+    } catch (error) {
+      console.error(`❌ Error updating status for row ${rowIndex}:`, error);
+    }
+  }, [data, saveProcessStatus]);
+
+  // Reset all process status
+  const resetAllProcessStatus = useCallback(async () => {
+    if (!data || data.length === 0) return;
+    
+    const shouldReset = confirm(`Reset process status for all ${data.length} data items? This will mark all as pending.`);
+    if (!shouldReset) return;
+    
+    try {
+      const resetPromises = data.map(async (item) => {
+        const resetStatus = {
+          status: 'pending' as const,
+          lastProcessed: '',
+          notes: 'Status reset by user',
+          processedBy: 'User'
+        };
+        
+        // Update local state using data ID as key
+        setProcessHistory(prev => new Map(prev).set(item.id, resetStatus));
+        
+        // Save to permanent storage
+        await saveProcessStatus(item.id, resetStatus);
+      });
+      
+      await Promise.all(resetPromises);
+      alert('✅ All process status reset to pending!');
+      
+    } catch (error) {
+      console.error('Error resetting process status:', error);
+      alert('❌ Error resetting some status. Check console for details.');
+    }
+  }, [data, saveProcessStatus]);
+
+  // Clean up invalid process status (for data that no longer exists)
+  const cleanupInvalidProcessStatus = useCallback(async () => {
+    try {
+      // Get all stored process status keys
+      const allKeys = Object.keys(localStorage);
+      const processStatusKeys = allKeys.filter(key => key.startsWith('process_status_'));
+      
+      // Get current data IDs
+      const currentDataIds = new Set(data.map(item => item.id));
+      
+      // Remove status for data that no longer exists
+      let removedCount = 0;
+      processStatusKeys.forEach(key => {
+        const dataId = parseInt(key.replace('process_status_', ''));
+        if (!currentDataIds.has(dataId)) {
+          localStorage.removeItem(key);
+          removedCount++;
+          console.log(`🗑️ Removed process status for non-existent data ID: ${dataId}`);
+        }
+      });
+      
+      if (removedCount > 0) {
+        console.log(`🧹 Cleaned up ${removedCount} invalid process status entries`);
+        // Reload process status after cleanup
+        window.location.reload();
+      } else {
+        console.log('✅ No invalid process status entries found');
+      }
+      
+    } catch (error) {
+      console.error('Error cleaning up process status:', error);
+    }
+  }, [data]);
+
   // Compute surname strictly from name's last word, then filter out blanks
   // Use backend-provided surname; only drop rows with truly blank surnames
   const filteredData = useMemo(() => {
     // For imported data, be less strict about filtering
     // Show all rows but mark those without surnames
     const processedData = (data || []).map((item, index) => {
-      const processInfo = processHistory.get(index) || {
+      // Get process info from history using data ID (not row index)
+      const processInfo = processHistory.get(item.id);
+      
+      // Debug logging to check data ID mapping
+      if (processInfo) {
+        console.log(`🔍 Data ID ${item.id} (Row ${index}) has process status:`, processInfo.status);
+      }
+      
+      // Use default status if no valid process info found
+      const finalProcessInfo = processInfo || {
         status: 'pending',
         lastProcessed: '',
         notes: '',
@@ -151,8 +362,8 @@ export default function SurnameDataTable({
         ...item,
         checkbox: selectedRows.has(index), // Add checkbox state
         surname: item.surname || item.name?.split(' ').pop() || 'Unknown',
-        processStatus: processInfo.status,
-        lastProcessed: processInfo.lastProcessed
+        processStatus: finalProcessInfo.status,
+        lastProcessed: finalProcessInfo.lastProcessed
       };
     });
     
@@ -278,19 +489,35 @@ export default function SurnameDataTable({
   // Process individual row
   const processRow = useCallback(async (rowIndex: number) => {
     try {
+      const rowData = data[rowIndex];
+      if (!rowData) {
+        console.error(`No data found for row ${rowIndex}`);
+        return;
+      }
+
       // Mark as processing
-      setProcessHistory(prev => new Map(prev).set(rowIndex, {
-        status: 'processing',
+      const processingStatus = {
+        status: 'processing' as const,
         lastProcessed: new Date().toISOString(),
         notes: 'Processing started...',
         processedBy: 'System'
-      }));
+      };
+      
+      // Use data ID as key, not row index
+      console.log(`🔄 Setting process status for Data ID ${rowData.id} (Row ${rowIndex}):`, processingStatus);
+      setProcessHistory(prev => {
+        const newMap = new Map(prev).set(rowData.id, processingStatus);
+        console.log(`📊 Process history updated. Total entries: ${newMap.size}`);
+        return newMap;
+      });
+      
+      // Save processing status to permanent storage
+      await saveProcessStatus(rowData.id, processingStatus);
 
       // Simulate processing delay
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Process the data (clean, validate, enrich)
-      const rowData = data[rowIndex];
       const processedData = {
         ...rowData,
         surname: (rowData.surname || '').trim().replace(/\s+/g, ' '),
@@ -300,27 +527,53 @@ export default function SurnameDataTable({
       };
 
       // Mark as completed
-      setProcessHistory(prev => new Map(prev).set(rowIndex, {
-        status: 'completed',
+      const completedStatus = {
+        status: 'completed' as const,
         lastProcessed: new Date().toISOString(),
         notes: 'Data cleaned and validated successfully',
         processedBy: 'System'
-      }));
+      };
+      
+      // Use data ID as key, not row index
+      console.log(`✅ Setting completed status for Data ID ${rowData.id} (Row ${rowIndex}):`, completedStatus);
+      setProcessHistory(prev => {
+        const newMap = new Map(prev).set(rowData.id, completedStatus);
+        console.log(`📊 Process history updated. Total entries: ${newMap.size}`);
+        return newMap;
+      });
+      
+      // Save completed status to permanent storage
+      await saveProcessStatus(rowData.id, completedStatus);
 
-      console.log(`✅ Row ${rowIndex} processed successfully:`, processedData);
+      console.log(`✅ Data ID ${rowData.id} processed successfully:`, processedData);
+      console.log(`📊 Process history updated for data ID ${rowData.id}:`, completedStatus);
       
     } catch (error) {
       console.error(`❌ Error processing row ${rowIndex}:`, error);
       
-      // Mark as failed
-      setProcessHistory(prev => new Map(prev).set(rowIndex, {
-        status: 'failed',
-        lastProcessed: new Date().toISOString(),
-        notes: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        processedBy: 'System'
-      }));
+      const rowData = data[rowIndex];
+      if (rowData) {
+        // Mark as failed
+        const failedStatus = {
+          status: 'failed' as const,
+          lastProcessed: new Date().toISOString(),
+          notes: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          processedBy: 'System'
+        };
+        
+        // Use data ID as key, not row index
+        console.log(`❌ Setting failed status for Data ID ${rowData.id} (Row ${rowIndex}):`, failedStatus);
+        setProcessHistory(prev => {
+          const newMap = new Map(prev).set(rowData.id, failedStatus);
+          console.log(`📊 Process history updated. Total entries: ${newMap.size}`);
+          return newMap;
+        });
+        
+        // Save failed status to permanent storage
+        await saveProcessStatus(rowData.id, failedStatus);
+      }
     }
-  }, [data]);
+  }, [data, saveProcessStatus]);
 
   // Process selected rows
   const processSelectedRows = useCallback(async () => {
@@ -489,14 +742,25 @@ export default function SurnameDataTable({
               />
               <span>Select All ({selectedRows.size} selected)</span>
             </label>
+            
+            {/* Permission Indicator */}
+            <div className="flex items-center space-x-2">
+              <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                canEditSurnames('surnames') 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                {canEditSurnames('surnames') ? '✏️ Edit Mode' : '👁️ View Only'}
+              </div>
+            </div>
           </div>
           <div className="flex items-center space-x-3">
             {/* Process Buttons */}
             <button
               onClick={processAllRows}
-              disabled={processingData || data.length === 0}
+              disabled={processingData || data.length === 0 || !canEditSurnames('surnames')}
               className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-              title="Process all rows"
+              title={!canEditSurnames('surnames') ? 'Edit permission required' : 'Process all rows'}
             >
               {processingData ? 'Processing...' : 'Process All'}
             </button>
@@ -505,9 +769,9 @@ export default function SurnameDataTable({
               <>
                 <button
                   onClick={processSelectedRows}
-                  disabled={processingData}
+                  disabled={processingData || !canEditSurnames('surnames')}
                   className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                  title="Process selected rows"
+                  title={!canEditSurnames('surnames') ? 'Edit permission required' : 'Process selected rows'}
                 >
                   {processingData ? 'Processing...' : `Process ${selectedRows.size} Selected`}
                 </button>
@@ -519,6 +783,44 @@ export default function SurnameDataTable({
                 </button>
               </>
             )}
+            
+            {/* Status Management Buttons */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={resetAllProcessStatus}
+                disabled={processingData || !canEditSurnames('surnames')}
+                className="px-3 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                title={!canEditSurnames('surnames') ? 'Edit permission required' : 'Reset all process status'}
+              >
+                Reset All Status
+              </button>
+              
+              <button
+                onClick={() => {
+                  const status = prompt('Enter new status (pending/processing/completed/failed/needs_review):', 'completed');
+                  if (status && selectedRows.size > 0) {
+                    const notes = prompt('Enter notes (optional):', '') || undefined;
+                    selectedRows.forEach(rowIndex => {
+                      updateProcessStatus(rowIndex, status as any, notes);
+                    });
+                  }
+                }}
+                disabled={selectedRows.size === 0 || !canEditSurnames('surnames')}
+                className="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                title={!canEditSurnames('surnames') ? 'Edit permission required' : 'Update status for selected rows'}
+              >
+                Update Status
+              </button>
+              
+              <button
+                onClick={cleanupInvalidProcessStatus}
+                disabled={processingData}
+                className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                title="Clean up invalid process status entries"
+              >
+                🧹 Cleanup
+              </button>
+            </div>
             
             {/* Selection Count */}
             {selectedRows.size > 0 && (
@@ -559,15 +861,15 @@ export default function SurnameDataTable({
         
         <ExcelDataTable
           data={filteredData}
-          columns={columns}
+          columns={getColumns(canEditSurnames('surnames'))}
           loading={loading}
-          onUpdateRow={handleUpdateRow}
-          onBulkUpdate={handleBulkUpdate}
+          onUpdateRow={canEditSurnames('surnames') ? handleUpdateRow : undefined}
+          onBulkUpdate={canEditSurnames('surnames') ? handleBulkUpdate : undefined}
           pagination={pagination}
           onPageChange={onPageChange}
           onItemsPerPageChange={onItemsPerPageChange}
           showPagination={false}
-          enableExcelFeatures={true}
+          enableExcelFeatures={canEditSurnames('surnames')}
           showRefreshButton={false}
           tableHeight="h-full"
           rowHeight={28}
@@ -579,7 +881,48 @@ export default function SurnameDataTable({
       {/* Debug info - show in development */}
       {process.env.NODE_ENV === 'development' && (
         <div className="bg-white p-0 text-xs text-gray-600 border-t">
-          Debug: Showing {filteredData?.length || 0} rows out of {data?.length || 0} total records
+          <div className="px-4 py-2">
+            <div className="flex justify-between items-center">
+              <span>Debug: Showing {filteredData?.length || 0} rows out of {data?.length || 0} total records</span>
+              <button
+                onClick={() => {
+                  console.log('🔍 Current data:', data);
+                  console.log('🔍 Process history (data ID based):', Array.from(processHistory.entries()));
+                  console.log('🔍 LocalStorage keys:', Object.keys(localStorage).filter(key => key.startsWith('process_status_')));
+                  
+                  // Show detailed mapping
+                  console.log('🔍 Data ID to Status Mapping:');
+                  data.forEach((item, index) => {
+                    const status = processHistory.get(item.id);
+                    console.log(`Row ${index}: Data ID ${item.id} → Status: ${status?.status || 'pending'}`);
+                  });
+                }}
+                className="px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs hover:bg-gray-300"
+              >
+                📊 Debug Log
+              </button>
+            </div>
+            
+            {/* Show process status summary */}
+            {(() => {
+              const completedCount = Array.from(processHistory.values()).filter(p => p.status === 'completed').length;
+              const pendingCount = Array.from(processHistory.values()).filter(p => p.status === 'pending').length;
+              const processingCount = Array.from(processHistory.values()).filter(p => p.status === 'processing').length;
+              const failedCount = Array.from(processHistory.values()).filter(p => p.status === 'failed').length;
+              
+              return (
+                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                  <div className="text-blue-800 font-medium">📊 Process Status Summary:</div>
+                  <div className="text-blue-700 text-xs mt-1 space-y-1">
+                    <div>✅ Completed: {completedCount}</div>
+                    <div>⏳ Pending: {pendingCount}</div>
+                    <div>🔄 Processing: {processingCount}</div>
+                    <div>❌ Failed: {failedCount}</div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
 
@@ -616,7 +959,7 @@ export default function SurnameDataTable({
           <div className="bg-white rounded-lg p-6 w-96 max-h-96 overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-800">
-                Process History - Row {selectedRowForHistory + 1}
+                Process History - Data ID {data[selectedRowForHistory]?.id || 'Unknown'}
               </h3>
               <button
                 onClick={() => setShowProcessHistoryModal(false)}
@@ -630,11 +973,12 @@ export default function SurnameDataTable({
             
             <div className="space-y-4">
               {(() => {
-                const processInfo = processHistory.get(selectedRowForHistory);
+                const rowData = data[selectedRowForHistory];
+                const processInfo = rowData ? processHistory.get(rowData.id) : null;
                 if (!processInfo) {
                   return (
                     <div className="text-gray-500 text-center py-4">
-                      No process history available for this row.
+                      No process history available for this data item.
                     </div>
                   );
                 }

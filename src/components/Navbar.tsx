@@ -288,7 +288,8 @@ export default function Navbar() {
             <button className="px-4 py-2.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-base cursor-pointer">
               Maps
             </button>
-            <button className="px-4 py-2.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-base cursor-pointer">
+            <button className={getButtonClasses('/settings')}
+            onClick={() => router.push('/settings')}>
               Setting
             </button>
             <button className="px-4 py-2.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-base cursor-pointer">
@@ -418,6 +419,12 @@ export default function Navbar() {
             </button>
             <button className="px-3 py-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-sm text-left cursor-pointer">
               Cast By Surname
+            </button>
+            <button 
+              onClick={() => router.push('/settings')}
+              className={getMobileButtonClasses('/settings')}
+            >
+              Setting
             </button>
             <button className="px-3 py-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-all duration-200 font-medium text-sm text-left cursor-pointer">
               Report

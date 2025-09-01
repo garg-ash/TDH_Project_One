@@ -686,6 +686,59 @@ class ApiService {
     });
     return this.handleResponse<{ success: boolean; processedData: any; message: string; totalRecords: number }>(response);
   }
+
+  // Table Permissions Methods
+  async setupTablePermissions(): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/setup/table-permissions`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<{ success: boolean; message: string }>(response);
+  }
+
+  async getTablePermissions(): Promise<{ success: boolean; data: any[] }> {
+    const response = await fetch(`${API_BASE_URL}/table-permissions`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<{ success: boolean; data: any[] }>(response);
+  }
+
+  async getUserTablePermissions(userId: number): Promise<{ success: boolean; data: any[] }> {
+    const response = await fetch(`${API_BASE_URL}/table-permissions/user/${userId}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<{ success: boolean; data: any[] }>(response);
+  }
+
+  async updateTablePermission(id: number, canView: boolean, canEdit: boolean): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/table-permissions/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ can_view: canView, can_edit: canEdit }),
+    });
+    return this.handleResponse<{ success: boolean; message: string }>(response);
+  }
+
+  async bulkUpdateTablePermissions(permissions: Array<{
+    user_id: number;
+    table_name: string;
+    can_view: boolean;
+    can_edit: boolean;
+  }>): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/table-permissions/bulk`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ permissions }),
+    });
+    return this.handleResponse<{ success: boolean; message: string }>(response);
+  }
+
+  async checkTablePermission(tableName: string): Promise<{ success: boolean; data: { can_view: boolean; can_edit: boolean; source: string } }> {
+    const response = await fetch(`${API_BASE_URL}/table-permissions/check/${tableName}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<{ success: boolean; data: { can_view: boolean; can_edit: boolean; source: string } }>(response);
+  }
 }
 
 export const apiService = new ApiService();
